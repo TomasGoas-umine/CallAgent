@@ -1,0 +1,34 @@
+flowchart TD
+    Start(["✉️ POST /webhooks/elevenlabs/post-call"]) --> Firma{"¿Firma HMAC válida?<br/>ElevenLabs-Signature<br/>t=...,v0=..."}
+    Firma -->|No| Rechazo["401 + métrica<br/>webhooks_firma_invalida"]
+    Firma -->|Sí| Ts{"¿Timestamp dentro<br/>de 30 min?"}
+    Ts -->|No| Rechazo
+    Ts -->|Sí| Idem{"¿conversation_id<br/>ya procesado?"}
+    Idem -->|Sí| Ok200(["200 OK — no-op<br/>(idempotencia)"])
+    Idem -->|No| Lock["Escritura condicional<br/>attribute_not_exists(PK)"]
+    Lock --> Extraer["Extraer del payload:<br/>transcript · analysis<br/>data_collection_results<br/>evaluation_criteria_results<br/>metadata (duración, costo)"]
+    Extraer --> G1{"¿La llamada<br/>fue contestada?"}
+    G1 -->|No| Clasif1["resultado: no_answer /<br/>busy / voicemail /<br/>invalid_number"]
+    Clasif1 --> G2{"¿Intentos < 3?"}
+    G2 -->|Sí| Reintento[/"⏰ Programar reintento<br/>en 24h → Flujo 2"/]
+    G2 -->|No| Cerrar1["estado = AGOTADO"]
+    G1 -->|Sí| Persist["Persistir CALL en DynamoDB<br/>+ transcripción a S3<br/>(si está autorizado)"]
+    Persist --> G3{"¿requiere_humano = true<br/>o criterio de<br/>escalamiento?"}
+    G3 -->|Sí| Esc["→ Flujo 4"]
+    G3 -->|No| G4{"¿do_not_call<br/>solicitado?"}
+    G4 -->|Sí| Dnc["Marcar CONTACT<br/>do_not_call = true<br/>(permanente)"]
+    G4 -->|No| G5{"¿Objetivo cumplido?<br/>evaluation_criteria"}
+    G5 -->|Sí| Cerrar2["estado = RESUELTO<br/>+ compromiso registrado"]
+    G5 -->|No| G6{"¿Se obtuvo información<br/>accionable?"}
+    G6 -->|Sí| Follow["estado = FOLLOW_UP<br/>+ próxima acción"]
+    G6 -->|No| Cerrar3["estado = CERRADO<br/>sin_informacion"]
+    Persist --> Met["Emitir métricas<br/>CloudWatch"]
+    Reintento --> Fin(["200 OK"])
+    Cerrar1 --> Fin
+    Esc --> Fin
+    Dnc --> Fin
+    Cerrar2 --> Fin
+    Follow --> Fin
+    Cerrar3 --> Fin
+    Met --> Fin
+    Rechazo --> FinErr(["401"])

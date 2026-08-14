@@ -1,0 +1,22 @@
+flowchart TD
+    S1(["🔴 Agente detecta<br/>situación urgente"]) --> Reunir
+    S2(["🗣️ Destinatario pide<br/>hablar con humano"]) --> Reunir
+    S3(["🔁 Intentos agotados"]) --> Reunir
+    S4(["⚠️ Error persistente<br/>de proveedor"]) --> Reunir
+    Reunir["Reunir evidencia:<br/>transcripción · motivo original ·<br/>datos extraídos · historial de intentos"]
+    Reunir --> Limite["🛑 El agente limita su autonomía:<br/>NO promete soluciones<br/>NO entrega datos de terceros<br/>NO agenda compromisos no autorizados"]
+    Limite --> G1{"¿Severidad?"}
+    G1 -->|Alta| Now["Notificación inmediata<br/>a PMO (canal a definir)"]
+    G1 -->|Media/Baja| Cola["Agregar a cola<br/>de revisión diaria"]
+    Now --> Crear["Crear registro de<br/>ESCALATION<br/>estado = PENDIENTE_HUMANO"]
+    Cola --> Crear
+    Crear --> Bloquear["Bloquear reintentos<br/>automáticos de este seguimiento"]
+    Bloquear --> Espera[/"⏳ Esperar acción humana"/]
+    Espera -.-> PMO(["👤 PMO revisa<br/>y actúa fuera del sistema"])
+    PMO -.-> G2{"¿Resuelto?"}
+    G2 -->|Sí| Cierre["estado = RESUELTO_POR_HUMANO<br/>+ notas"]
+    G2 -->|No, requiere nueva llamada| Reabrir["Crear nuevo FOLLOWUP<br/>con contexto previo<br/>→ Flujo 1"]
+    G2 -->|No aplica| Descartar["estado = DESCARTADO<br/>+ motivo"]
+    Cierre --> Fin(["Fin"])
+    Reabrir --> Fin
+    Descartar --> Fin

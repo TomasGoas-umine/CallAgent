@@ -1,0 +1,33 @@
+flowchart TD
+    Start(["✉️ Mensaje en SQS<br/>followup_id"]) --> Load["Cargar FOLLOWUP<br/>desde DynamoDB"]
+    Load --> G0{"¿Estado sigue<br/>siendo READY?"}
+    G0 -->|No| FinObs(["Fin: obsoleto<br/>(ya procesado)"])
+    G0 -->|Sí| Reval["🔄 REVALIDAR contra Semáforo<br/>(dato puede tener ~30 min de desfase)"]
+    Reval --> G1{"¿La condición<br/>sigue vigente?"}
+    G1 -->|No| Cerrar["Cerrar<br/>resultado: resuelto_sin_llamada"]
+    G1 -->|Sí| G2{"¿Dentro de<br/>ventana horaria?<br/>09:00-19:00 hábil"}
+    G2 -->|No| Reagendar[/"⏰ Reagendar<br/>próxima ventana"/]
+    G2 -->|Sí| G3{"¿Nº en allowlist?<br/>(dev/qa)"}
+    G3 -->|No| Bloq["Bloquear<br/>+ alerta"]
+    G3 -->|Sí| Prep["Preparar contexto:<br/>dynamic_variables<br/>nombre · curso · OC · motivo"]
+    Prep --> Marcar["Marcar estado = DIALING<br/>(condicional, anti doble disparo)"]
+    Marcar --> Call[/"POST /v1/convai/twilio/outbound-call"/]
+    Call -.-> EL["🎙️ ElevenLabs<br/>prepara el agente"]
+    EL -.-> TW["📞 Twilio marca<br/>al destinatario"]
+    TW -.-> Dest(["👤 Destinatario"])
+    Call --> G4{"¿Respuesta<br/>200 OK?"}
+    G4 -->|No| Err["Registrar error<br/>estado = ERROR"]
+    Err --> G5{"¿Intentos < 3?"}
+    G5 -->|Sí| Backoff[/"⏰ Backoff 24h"/]
+    G5 -->|No| Agotado["estado = AGOTADO<br/>→ escalamiento"]
+    G4 -->|Sí| Persist["Guardar conversation_id<br/>y callSid"]
+    Persist --> Wait[/"⏳ Esperar<br/>post-call webhook<br/>(timeout 30 min)"/]
+    Wait --> G6{"¿Llegó el webhook?"}
+    G6 -->|Sí| FinOk(["Fin: → Flujo 3"])
+    G6 -->|No, timeout| Recon["Reconciliar vía<br/>GET /v1/convai/conversations/{id}"]
+    Recon --> FinOk
+    Reagendar --> FinDif(["Fin: diferido"])
+    Backoff --> FinDif
+    Cerrar --> FinCer(["Fin: cerrado sin llamar"])
+    Bloq --> FinBloq(["Fin: bloqueado"])
+    Agotado --> FinEsc(["Fin: → Flujo 4"])

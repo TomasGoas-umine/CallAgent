@@ -1,0 +1,34 @@
+flowchart TD
+    Start(["⏰ Timer: cron días hábiles<br/>09:00 y 15:00 America/Santiago"]) --> Kill{"¿Kill switch<br/>activo? (SSM)"}
+    Kill -->|Sí| FinKill(["Fin: ejecución abortada<br/>+ métrica"])
+    Kill -->|No| Fetch["Leer Semáforo<br/>GET /tablero/search<br/>(solo lectura)"]
+    Fetch --> Reglas["Aplicar reglas de urgencia<br/>MVP: Sección A · nivel CRITICO"]
+    Reglas --> G1{"¿Hay candidatos?"}
+    G1 -->|No| FinSin(["Fin: nada que hacer"])
+    G1 -->|Sí| Loop["Por cada candidato"]
+    Loop --> G2{"¿Tiene teléfono<br/>válido E.164?"}
+    G2 -->|No| Descarta1["Descartar<br/>motivo: sin_telefono"]
+    G2 -->|Sí| G3{"¿do_not_call?"}
+    G3 -->|Sí| Descarta2["Descartar<br/>motivo: do_not_call"]
+    G3 -->|No| G4{"¿Ya existe seguimiento<br/>con la misma<br/>idempotency_key?"}
+    G4 -->|Sí| Descarta3["Descartar<br/>motivo: duplicado"]
+    G4 -->|No| G5{"¿Contactado en<br/>las últimas 24h?"}
+    G5 -->|Sí| Descarta4["Descartar<br/>motivo: cooldown"]
+    G5 -->|No| Prio["Asignar motivo,<br/>prioridad y guion"]
+    Prio --> G6{"⚠️ ¿Requiere<br/>aprobación humana?<br/>(a definir en Fase 0)"}
+    G6 -->|Sí| Espera[/"Esperar aprobación<br/>de PMO"/]
+    Espera -.-> PMO(["👤 PMO revisa"])
+    PMO -.-> G7{"¿Aprobada?"}
+    G7 -->|No| Descarta5["Descartar<br/>motivo: rechazado"]
+    G7 -->|Sí| Crear
+    G6 -->|No| Crear["Crear FOLLOWUP<br/>estado = READY<br/>(escritura condicional)"]
+    Crear --> G8{"¿Cuota diaria<br/>alcanzada?"}
+    G8 -->|Sí| Diferir["Diferir a mañana<br/>+ alarma"]
+    G8 -->|No| Encolar[/"Publicar en SQS FIFO<br/>MessageGroupId = destinatario"/]
+    Encolar --> FinOk(["Fin: candidato encolado"])
+    Descarta1 --> FinDesc(["Fin: descartado con motivo trazable"])
+    Descarta2 --> FinDesc
+    Descarta3 --> FinDesc
+    Descarta4 --> FinDesc
+    Descarta5 --> FinDesc
+    Diferir --> FinDesc
