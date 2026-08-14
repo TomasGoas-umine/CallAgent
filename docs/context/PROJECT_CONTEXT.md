@@ -56,7 +56,7 @@ el tiempo de reaccion.
   (gateado por `REQUIRE_AUTH`, que puede no estar seteada). Umine Voice trata a tablero-api
   como fuente de solo lectura y nunca le escribe.
 - **No existe campo de telefono** en ningun punto de la cadena `po -> pod ->
-  execution-sence -> tablero-api`, ni de alumno ni de encargado de capacitacion. Tampoco
+execution-sence -> tablero-api`, ni de alumno ni de encargado de capacitacion. Tampoco
   existe `do_not_call`, ni se expone `last_sence_sync` real (solo `updated_at`, que puede
   reflejar ediciones manuales). Por eso el MVP usa `FixtureTableroApiClient` con un campo
   sintetico `phone_test_only` explicitamente marcado como dato de prueba — nunca se debe

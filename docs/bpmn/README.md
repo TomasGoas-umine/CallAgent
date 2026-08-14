@@ -10,14 +10,14 @@ que el cambio de codigo: un BPMN desactualizado es peor que no tener BPMN.
 Aunque los diagramas estan escritos como flowchart (no como swimlanes explicitos de BPMN), los
 actores involucrados en el proceso son:
 
-| Actor | Rol |
-|---|---|
+| Actor                 | Rol                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | **Umine Operacional** | El Semaforo (tablero-api / micrositio-operaciones-tablero-sence) — fuente de datos de solo lectura, nunca se le escribe. |
-| **Umine Voice** | Este proyecto: candidate-evaluator, call-dispatcher, webhooks, persistencia DynamoDB. |
-| **ElevenLabs** | Agente conversacional + orquestacion de la llamada saliente (integracion nativa con Twilio, ver ADR-003). |
-| **Twilio** | Proveedor telefonico — marca al destinatario, el audio viaja directo Twilio<->ElevenLabs. |
-| **Destinatario** | La persona que recibe la llamada (encargado de capacitacion o alumno — sin confirmar, ver ADR-006 / prompt §9). |
-| **PMO** | Revisa y actua sobre escalamientos y (si se activa esa rama) aprobaciones manuales antes de llamar. |
+| **Umine Voice**       | Este proyecto: candidate-evaluator, call-dispatcher, webhooks, persistencia DynamoDB.                                    |
+| **ElevenLabs**        | Agente conversacional + orquestacion de la llamada saliente (integracion nativa con Twilio, ver ADR-003).                |
+| **Twilio**            | Proveedor telefonico — marca al destinatario, el audio viaja directo Twilio<->ElevenLabs.                                |
+| **Destinatario**      | La persona que recibe la llamada (encargado de capacitacion o alumno — sin confirmar, ver ADR-006 / prompt §9).          |
+| **PMO**               | Revisa y actua sobre escalamientos y (si se activa esa rama) aprobaciones manuales antes de llamar.                      |
 
 ## Los 4 flujos
 

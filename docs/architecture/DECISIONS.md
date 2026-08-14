@@ -134,6 +134,7 @@ del grupo — una eleccion de implementacion para poder probar el flujo, NO una 
 pregunta de negocio).
 
 **Asumido temporalmente, pendiente de confirmacion de jefatura:**
+
 - El destinatario siempre es informado de que habla con una IA en el primer mensaje del guion
   (asumido: si, siempre — decision que legal debe confirmar).
 - `call_recording_enabled: false` por defecto (asumido: no se graba en el piloto).

@@ -98,14 +98,14 @@ GSI2: GSI2PK=DEST#<destinatario> GSI2SK=<created_at>       → cooldown por dest
 
 ## Entorno local vs. AWS real
 
-| Pieza | AWS real (futuro) | Local (esta sesion) |
-|---|---|---|
-| DynamoDB | DynamoDB real | `dynalite` (ver ADR-007 — no habia Docker en el sandbox de esta sesion) |
-| Cola | SQS FIFO | Cola en memoria (`src/services/queue.ts`, ver ADR-005) |
-| API Gateway | HTTP API v2 | Fastify (`src/local/server.ts`) adaptando el mismo shape de evento/respuesta |
-| Cron | EventBridge Scheduler | Disparo manual (`POST /internal/evaluator`) o `scripts/local-demo.ts` |
-| Kill switch | SSM Parameter Store | Variable de entorno `KILL_SWITCH` |
-| Secretos | Secrets Manager | `.env` (nunca commiteado, `.env.example` solo con nombres) |
+| Pieza       | AWS real (futuro)     | Local (esta sesion)                                                          |
+| ----------- | --------------------- | ---------------------------------------------------------------------------- |
+| DynamoDB    | DynamoDB real         | `dynalite` (ver ADR-007 — no habia Docker en el sandbox de esta sesion)      |
+| Cola        | SQS FIFO              | Cola en memoria (`src/services/queue.ts`, ver ADR-005)                       |
+| API Gateway | HTTP API v2           | Fastify (`src/local/server.ts`) adaptando el mismo shape de evento/respuesta |
+| Cron        | EventBridge Scheduler | Disparo manual (`POST /internal/evaluator`) o `scripts/local-demo.ts`        |
+| Kill switch | SSM Parameter Store   | Variable de entorno `KILL_SWITCH`                                            |
+| Secretos    | Secrets Manager       | `.env` (nunca commiteado, `.env.example` solo con nombres)                   |
 
 ## Infra como codigo (construida, no desplegada)
 
