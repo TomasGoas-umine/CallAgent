@@ -1,0 +1,22 @@
+# Entorno local de referencia (forma "oficial" para el equipo, ver prompt §10).
+#
+# NOTA para quien retome esto: en la sesion en que se construyo este esqueleto, el sandbox de
+# ejecucion no tenia Docker disponible. Para poder probar el flujo end-to-end de todas formas,
+# se uso `dynalite` (implementacion pura JS de la API de DynamoDB, sin Docker/Java) via
+# `npm run local:up` / `npm run local:down` (ver scripts/local-dynamo-up.ts). Ambos hablan el
+# mismo protocolo AWS SDK DynamoDB, asi que el resto del proyecto (BaseRepository, scripts de
+# seed/create-tables) funciona igual con cualquiera de los dos. Si tienes Docker disponible,
+# usa este docker-compose (mas fiel a producción real, dynamodb-local es el binario oficial de AWS).
+#
+# No se incluye una cola SQS FIFO local (ElasticMQ): para el MVP se eligio una cola en memoria
+# (src/local/in-memory-queue.ts), documentado en CLAUDE.md — evita una dependencia de infra
+# adicional para un flujo que en local se ejecuta de forma sincronica/secuencial de todas formas.
+version: '3.8'
+
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:2.5.4
+    command: '-jar DynamoDBLocal.jar -sharedDb -inMemory'
+    ports:
+      - '8000:8000'
+    working_dir: /home/dynamodblocal
