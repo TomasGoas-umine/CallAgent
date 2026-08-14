@@ -17,12 +17,12 @@
     "test:watch": "vitest",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",
-    "local:up": "tsx scripts/local-dynamo-up.ts",
-    "local:down": "tsx scripts/local-dynamo-down.ts",
-    "local:create-tables": "tsx scripts/create-local-tables.ts",
-    "local:seed": "tsx scripts/seed-local.ts",
-    "local:server": "tsx src/local/server.ts",
-    "local:demo": "tsx scripts/local-demo.ts"
+    "local:up": "tsx --env-file=.env scripts/local-dynamo-up.ts",
+    "local:down": "tsx --env-file=.env scripts/local-dynamo-down.ts",
+    "local:create-tables": "tsx --env-file=.env scripts/create-local-tables.ts",
+    "local:seed": "tsx --env-file=.env scripts/seed-local.ts",
+    "local:server": "tsx --env-file=.env src/local/server.ts",
+    "local:demo": "tsx --env-file=.env scripts/local-demo.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.649.0",

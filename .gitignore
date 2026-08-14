@@ -9,3 +9,4 @@ coverage/
 npm-debug.log*
 .dynamo-local-data/
 .vitest-cache/
+.dynalite.pid
