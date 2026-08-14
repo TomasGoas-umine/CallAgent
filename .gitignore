@@ -1,0 +1,11 @@
+node_modules/
+dist/
+cdk.out/
+.env
+*.local.env
+coverage/
+.DS_Store
+*.log
+npm-debug.log*
+.dynamo-local-data/
+.vitest-cache/

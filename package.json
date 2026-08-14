@@ -1,0 +1,48 @@
+{
+  "name": "umine-voice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Umine Voice — agente de voz que detecta urgencias en el Semaforo operacional, llama via Twilio+ElevenLabs y registra el resultado.",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "local:up": "tsx scripts/local-dynamo-up.ts",
+    "local:down": "tsx scripts/local-dynamo-down.ts",
+    "local:create-tables": "tsx scripts/create-local-tables.ts",
+    "local:seed": "tsx scripts/seed-local.ts",
+    "local:server": "tsx src/local/server.ts",
+    "local:demo": "tsx scripts/local-demo.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.649.0",
+    "@aws-sdk/lib-dynamodb": "^3.649.0",
+    "fastify": "^5.12.0",
+    "twilio": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.8.0",
+    "@typescript-eslint/parser": "^8.8.0",
+    "aws-cdk": "^2.160.0",
+    "aws-cdk-lib": "^2.160.0",
+    "constructs": "^10.3.0",
+    "dynalite": "^4.0.0",
+    "eslint": "^9.11.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  }
+}
