@@ -1,0 +1,76 @@
+name: CI
+
+# Nunca ejecuta llamadas reales a Twilio/ElevenLabs — todos los tests usan mocks/fixtures
+# (MOCK_PROVIDERS=true, TABLERO_API_MODE=fixture son los defaults; no se setean credenciales
+# reales en ningun paso de este workflow).
+
+on:
+  push:
+    branches: [main, dev, prod]
+  pull_request:
+    branches: [main, dev, prod]
+
+jobs:
+  lint-typecheck-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Format check (Prettier)
+        run: npm run format:check
+
+      - name: Type check (tsc --noEmit)
+        run: npm run build
+
+      - name: Unit + integration tests (Vitest)
+        run: npm test
+        env:
+          NODE_ENV: test
+          MOCK_PROVIDERS: 'true'
+          TABLERO_API_MODE: 'fixture'
+          DRY_RUN: 'true'
+          KILL_SWITCH: 'false'
+
+  conventional-commits:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate Conventional Commits
+        uses: webiny/action-conventional-commits@v1.3.0
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for leaked secrets (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verificar que .env.example no tenga valores reales
+        run: |
+          if grep -qE '=[A-Za-z0-9+/]{20,}' .env.example; then
+            echo "::error::.env.example parece tener un valor real, no solo nombres de variables."
+            exit 1
+          fi
+          echo "OK: .env.example solo tiene nombres de variables."
