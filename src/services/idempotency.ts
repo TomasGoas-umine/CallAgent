@@ -17,7 +17,14 @@ export function isoWeekWindow(date: Date = new Date()): string {
   const dayNum = (d.getUTCDay() + 6) % 7; // lunes=0 ... domingo=6
   d.setUTCDate(d.getUTCDate() - dayNum + 3); // jueves de esa semana ISO
   const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  const week = 1 + Math.round(((d.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  const week =
+    1 +
+    Math.round(
+      ((d.getTime() - firstThursday.getTime()) / 86400000 -
+        3 +
+        ((firstThursday.getUTCDay() + 6) % 7)) /
+        7,
+    );
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 

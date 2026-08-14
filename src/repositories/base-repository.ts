@@ -58,22 +58,22 @@ export abstract class BaseRepository {
   }
 
   protected async getItem<T>(key: DynamoKey): Promise<T | null> {
-    const result = await this.doc.send(
-      new GetCommand({ TableName: this.tableName, Key: key }),
-    );
+    const result = await this.doc.send(new GetCommand({ TableName: this.tableName, Key: key }));
     return (result.Item as T | undefined) ?? null;
   }
 
   /** Put simple, sin condicion — usar solo cuando sobrescribir es intencional (ej. upsert de CONTACT). */
-  protected async putItem<T extends Record<string, unknown>>(item: T): Promise<void> {
-    await this.doc.send(new PutCommand({ TableName: this.tableName, Item: item }));
+  protected async putItem<T extends object>(item: T): Promise<void> {
+    await this.doc.send(
+      new PutCommand({ TableName: this.tableName, Item: item as Record<string, unknown> }),
+    );
   }
 
   /**
    * Put condicional — la base de la idempotencia en todo el proyecto (prompt §1.5).
    * Lanza ConditionalCheckFailedError si la condicion no se cumple (ej. attribute_not_exists(PK)).
    */
-  protected async putItemConditional<T extends Record<string, unknown>>(
+  protected async putItemConditional<T extends object>(
     item: T,
     conditionExpression: string,
     expressionAttributeValues?: Record<string, unknown>,
@@ -83,7 +83,7 @@ export abstract class BaseRepository {
       await this.doc.send(
         new PutCommand({
           TableName: this.tableName,
-          Item: item,
+          Item: item as Record<string, unknown>,
           ConditionExpression: conditionExpression,
           ExpressionAttributeValues: expressionAttributeValues,
           ExpressionAttributeNames: expressionAttributeNames,
@@ -143,9 +143,7 @@ export abstract class BaseRepository {
   }
 
   protected async query<T>(params: Omit<QueryCommandInput, 'TableName'>): Promise<T[]> {
-    const result = await this.doc.send(
-      new QueryCommand({ TableName: this.tableName, ...params }),
-    );
+    const result = await this.doc.send(new QueryCommand({ TableName: this.tableName, ...params }));
     return (result.Items as T[] | undefined) ?? [];
   }
 }

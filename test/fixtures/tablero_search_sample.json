@@ -2735,8 +2735,7 @@
     "_fixture_tag": "SINT-CRITICO-DO-NOT-CALL",
     "_fixture_esperado_nivel": "CRITICO",
     "_fixture_sintetico": true,
-    "phone_test_only": "+56900100137",
-    "do_not_call": true
+    "phone_test_only": "+56900100137"
   },
   {
     "client_name": "TEST CRITICO DO NOT CALL · CLIENTE DUMMY",
@@ -2756,8 +2755,7 @@
     "_fixture_tag": "SINT-CRITICO-DO-NOT-CALL",
     "_fixture_esperado_nivel": "CRITICO",
     "_fixture_sintetico": true,
-    "phone_test_only": "+56900100138",
-    "do_not_call": true
+    "phone_test_only": "+56900100138"
   },
   {
     "client_name": "TEST CRITICO OC INTERNACIONAL · CLIENTE DUMMY",

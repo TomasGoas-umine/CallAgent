@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { classifyCallOutcome } from '../../src/services/call-outcome-classifier.js';
 import type { ElevenLabsPostCallPayload } from '../../src/domain/call.js';
 
-function payload(overrides: Partial<ElevenLabsPostCallPayload['data']> = {}): ElevenLabsPostCallPayload {
+function payload(
+  overrides: Partial<ElevenLabsPostCallPayload['data']> = {},
+): ElevenLabsPostCallPayload {
   return {
     type: 'post_call_transcription',
     event_timestamp: Date.now(),

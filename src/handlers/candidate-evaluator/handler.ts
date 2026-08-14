@@ -1,0 +1,192 @@
+/**
+ * candidate-evaluator — Lambda disparada por cron (EventBridge en AWS real; en local, por
+ * npm run local:demo o por el endpoint POST /internal/evaluator del server Fastify).
+ * Ver docs/bpmn/flujo-1-seleccion-priorizacion.mmd para el flujo completo.
+ *
+ * Unico caso de uso del MVP (prompt §5.1): Seccion A - Riesgo Conexion - nivel CRITICO.
+ */
+
+import { randomUUID } from 'node:crypto';
+import { buildTableroApiClient } from '../../services/tablero-api-client.factory.js';
+import { groupOrders } from '../../services/order-status-promoter.js';
+import { getCourseWeek, clasificarConexion } from '../../services/urgency-classifier.js';
+import { computeIdempotencyKey } from '../../services/idempotency.js';
+import { isKillSwitchActive, isDailyQuotaExceeded } from '../../services/guardrails.js';
+import { FollowupRepository } from '../../repositories/followup-repository.js';
+import { ContactRepository } from '../../repositories/contact-repository.js';
+import { IdempotencyRepository } from '../../repositories/idempotency-repository.js';
+import { sharedLocalQueue, type QueueClient } from '../../services/queue.js';
+import { env } from '../../utils/env.js';
+import { logger } from '../../utils/logger.js';
+import { ok } from '../../utils/responses.js';
+import { tomorrowAtBusinessHoursStart } from '../../utils/scheduling.js';
+import type { Followup } from '../../domain/followup.js';
+import type { ApiResponse } from '../../utils/responses.js';
+
+const MOTIVO = 'riesgo_conexion_critico';
+
+export interface EvaluatorDeps {
+  followupRepository?: FollowupRepository;
+  contactRepository?: ContactRepository;
+  idempotencyRepository?: IdempotencyRepository;
+  queue?: QueueClient;
+}
+
+export type DiscardMotivo =
+  'sin_telefono' | 'do_not_call' | 'cooldown' | 'duplicado' | 'cuota_diaria_alcanzada';
+
+export interface EvaluatorResult {
+  killSwitch: boolean;
+  dryRun: boolean;
+  candidatesEvaluated: number;
+  created: Array<{
+    followupId: string;
+    destinatarioPhone: string;
+    orderNumber: string;
+    estado: string;
+  }>;
+  discarded: Array<{ orderNumber: string; motivo: DiscardMotivo }>;
+}
+
+export async function runCandidateEvaluator(deps: EvaluatorDeps = {}): Promise<EvaluatorResult> {
+  const followupRepository = deps.followupRepository ?? new FollowupRepository();
+  const contactRepository = deps.contactRepository ?? new ContactRepository();
+  const idempotencyRepository = deps.idempotencyRepository ?? new IdempotencyRepository();
+  const queue = deps.queue ?? sharedLocalQueue;
+
+  const result: EvaluatorResult = {
+    killSwitch: isKillSwitchActive(),
+    dryRun: env.dryRun,
+    candidatesEvaluated: 0,
+    created: [],
+    discarded: [],
+  };
+
+  if (result.killSwitch) {
+    logger.warn('candidate_evaluator_aborted_kill_switch');
+    return result;
+  }
+
+  const tableroClient = buildTableroApiClient();
+  const records = await tableroClient.search({ seccion: 'A_RIESGO_CONEXION' });
+  const groups = groupOrders(records);
+
+  let createdToday = 0;
+
+  for (const group of groups) {
+    const semana = getCourseWeek(group.initCourse, group.endCourse);
+    const nivel = clasificarConexion(semana, group.pctConexion);
+    if (nivel !== 'CRITICO') continue; // unico nivel/seccion en alcance de este MVP
+
+    result.candidatesEvaluated++;
+
+    const candidateRecord = group.records.find((r) => r.phone_test_only);
+    if (!candidateRecord?.phone_test_only) {
+      result.discarded.push({ orderNumber: group.orderNumber, motivo: 'sin_telefono' });
+      continue;
+    }
+    const phone = candidateRecord.phone_test_only;
+
+    const contact = await contactRepository.getByPhone(phone);
+    if (contact?.doNotCall) {
+      result.discarded.push({ orderNumber: group.orderNumber, motivo: 'do_not_call' });
+      continue;
+    }
+
+    if (contact?.lastContactedAt) {
+      const elapsedMs = Date.now() - new Date(contact.lastContactedAt).getTime();
+      if (elapsedMs < env.cooldownHours * 60 * 60 * 1000) {
+        result.discarded.push({ orderNumber: group.orderNumber, motivo: 'cooldown' });
+        continue;
+      }
+    }
+
+    const idempotencyKey = computeIdempotencyKey({
+      destinatario: phone,
+      motivo: MOTIVO,
+      orderNumber: group.orderNumber,
+    });
+
+    const existingLock = await idempotencyRepository.get(idempotencyKey);
+    if (existingLock) {
+      result.discarded.push({ orderNumber: group.orderNumber, motivo: 'duplicado' });
+      continue;
+    }
+
+    if (env.dryRun) {
+      // DRY_RUN=true (default local, prompt §5.1): solo lista candidatos, no crea ni encola nada.
+      result.created.push({
+        followupId: '(dry-run — no se creo FOLLOWUP)',
+        destinatarioPhone: phone,
+        orderNumber: group.orderNumber,
+        estado: 'DRY_RUN',
+      });
+      continue;
+    }
+
+    const followupId = randomUUID();
+    const acquired = await idempotencyRepository.tryAcquireLock(idempotencyKey, followupId);
+    if (!acquired) {
+      result.discarded.push({ orderNumber: group.orderNumber, motivo: 'duplicado' });
+      continue;
+    }
+
+    const willExceedQuota = isDailyQuotaExceeded(createdToday);
+    const now = new Date().toISOString();
+    const followup: Followup = {
+      followupId,
+      motivo: MOTIVO,
+      prioridad: 'ALTA',
+      estado: 'READY',
+      destinatarioId: group.clientId,
+      destinatarioPhone: phone,
+      oc: group.orderNumber,
+      curso: group.courseName,
+      intentos: 0,
+      nextAttemptAt: willExceedQuota ? tomorrowAtBusinessHoursStart() : now,
+      idempotencyKey,
+      createdAt: now,
+      updatedAt: now,
+      contexto: {
+        clientId: group.clientId,
+        clientName: candidateRecord.client_name,
+        courseName: group.courseName,
+        orderNumber: group.orderNumber,
+        initCourse: group.initCourse,
+        endCourse: group.endCourse,
+        nivelDetectado: 'CRITICO',
+        seccion: 'A_RIESGO_CONEXION',
+      },
+    };
+    await followupRepository.create(followup);
+
+    if (willExceedQuota) {
+      result.discarded.push({ orderNumber: group.orderNumber, motivo: 'cuota_diaria_alcanzada' });
+      continue;
+    }
+
+    await queue.publish({ followupId, messageGroupId: phone });
+    createdToday++;
+    result.created.push({
+      followupId,
+      destinatarioPhone: phone,
+      orderNumber: group.orderNumber,
+      estado: 'READY',
+    });
+  }
+
+  logger.info('candidate_evaluator_finished', {
+    candidatesEvaluated: result.candidatesEvaluated,
+    created: result.created.length,
+    discarded: result.discarded.length,
+    dryRun: result.dryRun,
+  });
+
+  return result;
+}
+
+/** Adaptador HTTP (API GW / server local) — dispara el mismo runCandidateEvaluator. */
+export async function handler(): Promise<ApiResponse> {
+  const result = await runCandidateEvaluator();
+  return ok(result);
+}

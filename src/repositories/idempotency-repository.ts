@@ -30,7 +30,11 @@ export class IdempotencyRepository extends BaseRepository {
    * Intenta adquirir el lock. Devuelve true si se adquirio (primera vez que se ve esta key),
    * false si ya existia (procesamiento duplicado — el llamador debe hacer no-op).
    */
-  async tryAcquireLock(key: string, followupId: string, ttlSeconds = 60 * 60 * 24 * 30): Promise<boolean> {
+  async tryAcquireLock(
+    key: string,
+    followupId: string,
+    ttlSeconds = 60 * 60 * 24 * 30,
+  ): Promise<boolean> {
     const nowSec = Math.floor(Date.now() / 1000);
     const item: IdempotencyItem = {
       PK: idempotencyPk(key),

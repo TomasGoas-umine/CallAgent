@@ -23,17 +23,26 @@ if (existsSync(PID_FILE)) {
   const pid = Number(readFileSync(PID_FILE, 'utf-8').trim());
   try {
     process.kill(pid, 0);
-    console.log(`dynalite ya esta corriendo (pid ${pid}). Usa 'npm run local:down' primero si quieres reiniciarlo.`);
+    console.log(
+      `dynalite ya esta corriendo (pid ${pid}). Usa 'npm run local:down' primero si quieres reiniciarlo.`,
+    );
     process.exit(0);
   } catch {
     // pid muerto, sigue y relanza
   }
 }
 
-const child = spawn(process.execPath, [path.resolve(__dirname, '..', 'node_modules', '.bin', 'tsx'), path.resolve(__dirname, 'dynalite-server.ts')], {
-  detached: true,
-  stdio: 'ignore',
-});
+const child = spawn(
+  process.execPath,
+  [
+    path.resolve(__dirname, '..', 'node_modules', '.bin', 'tsx'),
+    path.resolve(__dirname, 'dynalite-server.ts'),
+  ],
+  {
+    detached: true,
+    stdio: 'ignore',
+  },
+);
 child.unref();
 writeFileSync(PID_FILE, String(child.pid));
 console.log(`dynalite lanzado en background (pid ${child.pid}). Ver DYNAMODB_ENDPOINT en .env.`);

@@ -12,7 +12,7 @@ previa de `micrositio-operaciones-tablero-sence`), con dos diferencias explicita
    fuera de alcance de esta sesion.
 2. Agrega un campo `phone_test_only` — **dato SINTETICO, no existe en produccion**. tablero-api
    real no expone telefono en ningun punto de la cadena `po -> pod -> execution-sence ->
-   tablero-api` (ver `docs/context/PROJECT_CONTEXT.md`). Un subconjunto de registros omite este
+tablero-api` (ver `docs/context/PROJECT_CONTEXT.md`). Un subconjunto de registros omite este
    campo a proposito, para poder ejercitar el guardrail "descartar sin telefono valido".
 
 Cada registro representa un ALUMNO (igual que el dato real), con `enrolled_count: 1` y
@@ -22,15 +22,15 @@ hace el Semaforo real.
 
 ### Grupos incluidos (marcados con `_fixture_tag` / `_fixture_esperado_nivel`, solo para tests)
 
-| Tag | Origen | Nivel esperado | Notas |
-|---|---|---|---|
-| `REAL-1`, `REAL-2`, `REAL-3` | Dato real (des-identificado) de la auditoria | CRITICO | pct_conexion=0%/12.5%, semanas 3-4 |
-| `SINT-ALERTA-S2/S3/S4` | Sintetico | ALERTA | una por cada semana de curso 2/3/4 |
-| `SINT-NORMAL-S1/S2/S4` | Sintetico | NORMAL | no deberian aparecer como candidatos |
-| `SINT-CRITICO-SIN-TELEFONO` | Sintetico | CRITICO (descartado) | sin `phone_test_only` — prueba el guardrail |
-| `SINT-CRITICO-DO-NOT-CALL` | Sintetico | CRITICO (descartado) | `do_not_call: true` |
-| `SINT-CRITICO-OC-INTERNACIONAL` | Sintetico | CRITICO (descartado) | `order_number` empieza con `INT-` |
-| `SINT-CRITICO-DEMO` | Sintetico | CRITICO | usado por `scripts/local-demo.ts` para el flujo end-to-end |
+| Tag                             | Origen                                       | Nivel esperado       | Notas                                                                                                                                      |
+| ------------------------------- | -------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `REAL-1`, `REAL-2`, `REAL-3`    | Dato real (des-identificado) de la auditoria | CRITICO              | pct_conexion=0%/12.5%, semanas 3-4                                                                                                         |
+| `SINT-ALERTA-S2/S3/S4`          | Sintetico                                    | ALERTA               | una por cada semana de curso 2/3/4                                                                                                         |
+| `SINT-NORMAL-S1/S2/S4`          | Sintetico                                    | NORMAL               | no deberian aparecer como candidatos                                                                                                       |
+| `SINT-CRITICO-SIN-TELEFONO`     | Sintetico                                    | CRITICO (descartado) | sin `phone_test_only` — prueba el guardrail                                                                                                |
+| `SINT-CRITICO-DO-NOT-CALL`      | Sintetico                                    | CRITICO (descartado) | su telefono se siembra con `do_not_call=true` en CONTACT via `scripts/seed-local.ts` (tablero-api real no tiene este campo, ver mas abajo) |
+| `SINT-CRITICO-OC-INTERNACIONAL` | Sintetico                                    | CRITICO (descartado) | `order_number` empieza con `INT-`                                                                                                          |
+| `SINT-CRITICO-DEMO`             | Sintetico                                    | CRITICO              | usado por `scripts/local-demo.ts` para el flujo end-to-end                                                                                 |
 
 ### Sobre las fechas (importante)
 

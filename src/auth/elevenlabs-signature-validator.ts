@@ -16,7 +16,8 @@ export const DEFAULT_TOLERANCE_MS = 30 * 60 * 1000;
 
 export interface SignatureValidationResult {
   valid: boolean;
-  reason?: 'missing_header' | 'malformed_header' | 'timestamp_out_of_tolerance' | 'signature_mismatch';
+  reason?:
+    'missing_header' | 'malformed_header' | 'timestamp_out_of_tolerance' | 'signature_mismatch';
 }
 
 export function parseSignatureHeader(header: string): { t: number; v0: string } | null {
@@ -31,7 +32,11 @@ export function parseSignatureHeader(header: string): { t: number; v0: string } 
   return { t, v0 };
 }
 
-export function computeElevenLabsSignature(secret: string, timestamp: number, rawBody: string): string {
+export function computeElevenLabsSignature(
+  secret: string,
+  timestamp: number,
+  rawBody: string,
+): string {
   return createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
 }
 

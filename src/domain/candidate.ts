@@ -36,8 +36,6 @@ export interface TableroRecord {
    * TABLERO_API_MODE=fixture. Ver DECISIONS.md ADR-004.
    */
   phone_test_only?: string;
-  /** No existe en la cadena real del Semaforo — se modela para poder construir el guardrail. */
-  do_not_call?: boolean;
 }
 
 export interface TableroSearchFilters {

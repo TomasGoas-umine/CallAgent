@@ -78,7 +78,8 @@ export function isDailyQuotaExceeded(countSoFar: number): boolean {
  */
 export function runGuardrails(phone: string, ctx: GuardrailContext = {}): GuardrailResult {
   if (isKillSwitchActive()) return { allowed: false, motivo: 'kill_switch' };
-  if (!isWithinBusinessHours(ctx.now)) return { allowed: false, motivo: 'fuera_de_ventana_horaria' };
+  if (!isWithinBusinessHours(ctx.now))
+    return { allowed: false, motivo: 'fuera_de_ventana_horaria' };
   if (!isNumberAllowed(phone)) return { allowed: false, motivo: 'no_en_allowlist' };
   if (ctx.dailyCountSoFar !== undefined && isDailyQuotaExceeded(ctx.dailyCountSoFar)) {
     return { allowed: false, motivo: 'cuota_diaria_alcanzada' };

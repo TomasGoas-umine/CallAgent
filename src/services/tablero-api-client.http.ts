@@ -60,7 +60,10 @@ export class HttpTableroApiClient implements TableroApiClient {
       logger.warn('tablero_api_unexpected_pagination', { nextCursor: payload.nextCursor });
     }
     if (data.length >= KNOWN_HARDCODED_LIMIT) {
-      logger.warn('tablero_api_hit_hardcoded_limit', { count: data.length, limit: KNOWN_HARDCODED_LIMIT });
+      logger.warn('tablero_api_hit_hardcoded_limit', {
+        count: data.length,
+        limit: KNOWN_HARDCODED_LIMIT,
+      });
     }
     if (data.length >= RESPONSE_SIZE_RISK_RECORD_COUNT) {
       logger.warn('tablero_api_response_size_risk', {

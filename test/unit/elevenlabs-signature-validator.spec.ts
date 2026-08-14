@@ -6,7 +6,10 @@ import {
 } from '../../src/auth/elevenlabs-signature-validator.js';
 
 const SECRET = 'test-webhook-secret';
-const BODY = JSON.stringify({ type: 'post_call_transcription', data: { conversation_id: 'conv-1' } });
+const BODY = JSON.stringify({
+  type: 'post_call_transcription',
+  data: { conversation_id: 'conv-1' },
+});
 
 describe('verifyElevenLabsSignature', () => {
   it('acepta una firma valida dentro de la tolerancia', () => {
@@ -54,7 +57,10 @@ describe('verifyElevenLabsSignature', () => {
   it('rechaza si el body fue modificado despues de firmar', () => {
     const now = Date.now();
     const header = generateTestSignatureHeader(SECRET, BODY, Math.floor(now / 1000));
-    const tamperedBody = JSON.stringify({ type: 'post_call_transcription', data: { conversation_id: 'conv-2' } });
+    const tamperedBody = JSON.stringify({
+      type: 'post_call_transcription',
+      data: { conversation_id: 'conv-2' },
+    });
     const result = verifyElevenLabsSignature(header, tamperedBody, SECRET, now);
     expect(result).toEqual({ valid: false, reason: 'signature_mismatch' });
   });

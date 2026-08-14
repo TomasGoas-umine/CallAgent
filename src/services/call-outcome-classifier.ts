@@ -19,7 +19,11 @@
  * 10. Cualquier otro caso                                    -> unknown
  */
 
-import type { CallOutcome, ConnectionRiskDataCollection, ElevenLabsPostCallPayload } from '../domain/call.js';
+import type {
+  CallOutcome,
+  ConnectionRiskDataCollection,
+  ElevenLabsPostCallPayload,
+} from '../domain/call.js';
 
 const NOT_ANSWERED_STATUS_MAP: Record<string, CallOutcome> = {
   'no-answer': 'no_answer',
@@ -31,7 +35,11 @@ const NOT_ANSWERED_STATUS_MAP: Record<string, CallOutcome> = {
 };
 
 /** Valor centinela que el agente puede reportar en motivo_no_conexion cuando piden no ser llamados de nuevo. */
-const DO_NOT_CALL_SENTINELS = new Set(['no_contactar', 'solicita_no_ser_contactado', 'do_not_call']);
+const DO_NOT_CALL_SENTINELS = new Set([
+  'no_contactar',
+  'solicita_no_ser_contactado',
+  'do_not_call',
+]);
 
 function extractDataCollection(
   payload: ElevenLabsPostCallPayload,
@@ -43,7 +51,8 @@ function extractDataCollection(
     tiene_bloqueo_tecnico: Boolean(get('tiene_bloqueo_tecnico')),
     compromiso_fecha: (get('compromiso_fecha') as string | undefined) ?? '',
     requiere_humano: Boolean(get('requiere_humano')),
-    necesidad_capacitacion_futura: (get('necesidad_capacitacion_futura') as string | undefined) ?? '',
+    necesidad_capacitacion_futura:
+      (get('necesidad_capacitacion_futura') as string | undefined) ?? '',
   };
 }
 

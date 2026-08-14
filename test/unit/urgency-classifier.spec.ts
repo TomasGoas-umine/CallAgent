@@ -1,5 +1,9 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { getCourseWeek, clasificarConexion, WEEK_THRESHOLDS } from '../../src/services/urgency-classifier.js';
+import {
+  getCourseWeek,
+  clasificarConexion,
+  WEEK_THRESHOLDS,
+} from '../../src/services/urgency-classifier.js';
 
 // "now" fijo para poder construir fechas de inicio/termino con un progreso exacto conocido.
 const FIXED_NOW = new Date('2026-08-13T12:00:00.000Z');

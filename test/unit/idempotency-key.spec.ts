@@ -28,13 +28,28 @@ describe('computeIdempotencyKey', () => {
       now,
     });
     expect(
-      computeIdempotencyKey({ destinatario: '+56900000002', motivo: 'riesgo_conexion_critico', orderNumber: '100', now }),
+      computeIdempotencyKey({
+        destinatario: '+56900000002',
+        motivo: 'riesgo_conexion_critico',
+        orderNumber: '100',
+        now,
+      }),
     ).not.toBe(base);
     expect(
-      computeIdempotencyKey({ destinatario: '+56900000001', motivo: 'otro_motivo', orderNumber: '100', now }),
+      computeIdempotencyKey({
+        destinatario: '+56900000001',
+        motivo: 'otro_motivo',
+        orderNumber: '100',
+        now,
+      }),
     ).not.toBe(base);
     expect(
-      computeIdempotencyKey({ destinatario: '+56900000001', motivo: 'riesgo_conexion_critico', orderNumber: '200', now }),
+      computeIdempotencyKey({
+        destinatario: '+56900000001',
+        motivo: 'riesgo_conexion_critico',
+        orderNumber: '200',
+        now,
+      }),
     ).not.toBe(base);
   });
 

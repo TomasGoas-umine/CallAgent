@@ -18,7 +18,6 @@ const port = portFromEndpoint(env.dynamodbEndpoint);
 const server = dynalite({ createTableMs: 0, deleteTableMs: 0, updateTableMs: 0 });
 
 server.listen(port, () => {
-  // eslint-disable-next-line no-console
   console.log(`dynalite escuchando en :${port} (pid ${process.pid})`);
 });
 

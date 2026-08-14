@@ -158,7 +158,9 @@ describe('FollowupRepository', () => {
     const repo = new FollowupRepository(TABLE_NAME, doc);
     const phone = '+56900000099';
     const past = new Date(Date.now() - 1000 * 60 * 60).toISOString(); // hace 1h
-    await repo.create(makeFollowup({ followupId: 'f-cooldown-1', destinatarioPhone: phone, createdAt: past }));
+    await repo.create(
+      makeFollowup({ followupId: 'f-cooldown-1', destinatarioPhone: phone, createdAt: past }),
+    );
 
     const since = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(); // ultimas 24h
     const recent = await repo.findRecentByDestinatario(phone, since);

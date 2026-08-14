@@ -30,6 +30,16 @@ function followupPk(followupId: string): string {
   return `FOLLOWUP#${followupId}`;
 }
 
+function conversationPk(conversationId: string): string {
+  return `CONVERSATION#${conversationId}`;
+}
+
+interface ConversationLinkItem {
+  PK: string;
+  SK: 'META';
+  followupId: string;
+}
+
 function toItem(f: Followup): FollowupItem {
   return {
     ...f,
@@ -140,5 +150,28 @@ export class FollowupRepository extends BaseRepository {
       KeyConditionExpression: 'GSI2PK = :pk AND GSI2SK >= :since',
       ExpressionAttributeValues: { ':pk': `DEST#${destinatarioPhone}`, ':since': sinceIso },
     });
+  }
+
+  /**
+   * El webhook post-call de ElevenLabs solo trae `conversation_id`, no nuestro followupId
+   * interno (prompt §5.4 no lo modela explicitamente, pero es indispensable para poder
+   * correlacionar el webhook con el FOLLOWUP correcto). Se guarda este mapeo en el momento
+   * en que el dispatcher dispara la llamada con exito (item CONVERSATION#<id> META).
+   */
+  async linkConversation(conversationId: string, followupId: string): Promise<void> {
+    const item: ConversationLinkItem = {
+      PK: conversationPk(conversationId),
+      SK: 'META',
+      followupId,
+    };
+    await this.putItemConditional(item, 'attribute_not_exists(PK)');
+  }
+
+  async findFollowupIdByConversation(conversationId: string): Promise<string | null> {
+    const item = await this.getItem<ConversationLinkItem>({
+      PK: conversationPk(conversationId),
+      SK: 'META',
+    });
+    return item?.followupId ?? null;
   }
 }

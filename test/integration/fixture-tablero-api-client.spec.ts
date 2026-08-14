@@ -24,12 +24,6 @@ describe('FixtureTableroApiClient', () => {
     expect(records.some((r) => !r.phone_test_only)).toBe(true);
   });
 
-  it('incluye al menos un candidato marcado do_not_call', async () => {
-    const client = new FixtureTableroApiClient();
-    const records = await client.search({});
-    expect(records.some((r) => r.do_not_call === true)).toBe(true);
-  });
-
   it('al agrupar y clasificar, reproduce los niveles NORMAL/ALERTA/CRITICO esperados por grupo', async () => {
     // Las fechas de los grupos SINTETICOS del fixture fueron disenadas alrededor de
     // FIXTURE_REFERENCE_NOW con bandas de 21 dias de margen (ver scripts que generaron el
