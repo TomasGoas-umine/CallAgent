@@ -1,0 +1,49 @@
+{
+  "type": "post_call_transcription",
+  "event_timestamp": 1755100800,
+  "data": {
+    "conversation_id": "conv_sample_0001",
+    "agent_id": "agent_sample_0001",
+    "status": "done",
+    "call_successful": "success",
+    "transcript": [
+      {
+        "role": "agent",
+        "message": "Hola, le hablo de Umine respecto a su curso...",
+        "time_in_call_secs": 0
+      },
+      {
+        "role": "user",
+        "message": "Ah si, tuve un problema con la clave de acceso.",
+        "time_in_call_secs": 8
+      }
+    ],
+    "metadata": {
+      "call_duration_secs": 96,
+      "call_sid": "CA_sample_0001",
+      "cost": 0.42
+    },
+    "analysis": {
+      "transcript_summary": "El alumno reporta bloqueo de clave, se compromete a conectarse el 2026-08-20.",
+      "data_collection_results": {
+        "motivo_no_conexion": {
+          "value": "problema_de_clave",
+          "rationale": "El alumno lo menciono explicitamente."
+        },
+        "tiene_bloqueo_tecnico": { "value": true, "rationale": "Clave de acceso bloqueada." },
+        "compromiso_fecha": {
+          "value": "2026-08-20",
+          "rationale": "Se comprometio a conectarse esa fecha."
+        },
+        "requiere_humano": { "value": false, "rationale": "No lo solicito." },
+        "necesidad_capacitacion_futura": { "value": "", "rationale": "No menciono nada." }
+      },
+      "evaluation_criteria_results": {
+        "obtuvo_compromiso_fecha": {
+          "result": "success",
+          "rationale": "Se obtuvo una fecha de compromiso."
+        }
+      }
+    }
+  }
+}

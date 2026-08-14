@@ -1,0 +1,9 @@
+{
+  "CallSid": "CA_sample_0001",
+  "CallStatus": "completed",
+  "From": "+56900000000",
+  "To": "+56900100141",
+  "Direction": "outbound-api",
+  "CallDuration": "96",
+  "Timestamp": "2026-08-13T16:00:00Z"
+}

@@ -4,7 +4,11 @@ import { FollowupRepository } from '../../src/repositories/followup-repository.j
 import { ContactRepository } from '../../src/repositories/contact-repository.js';
 import { IdempotencyRepository } from '../../src/repositories/idempotency-repository.js';
 import { InMemoryQueueClient } from '../../src/services/queue.js';
-import { startDynamoServerHarness, createTestTable, type DynamoServerHarness } from './test-dynamo-harness.js';
+import {
+  startDynamoServerHarness,
+  createTestTable,
+  type DynamoServerHarness,
+} from './test-dynamo-harness.js';
 import { FIXTURE_REFERENCE_NOW } from '../fixtures/reference-time.js';
 
 const ORIGINAL_ENV = { ...process.env };

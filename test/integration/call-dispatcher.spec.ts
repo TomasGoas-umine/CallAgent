@@ -111,7 +111,9 @@ describe('call-dispatcher', () => {
     const stored = await followupRepository.getById(followup.followupId);
     expect(stored?.estado).toBe('DIALING');
 
-    const linkedFollowupId = await followupRepository.findFollowupIdByConversation(result.conversationId!);
+    const linkedFollowupId = await followupRepository.findFollowupIdByConversation(
+      result.conversationId!,
+    );
     expect(linkedFollowupId).toBe(followup.followupId);
   });
 
