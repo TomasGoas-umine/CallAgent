@@ -141,11 +141,16 @@ export async function dispatchFollowup(
     agentPhoneNumberId: env.elevenlabsAgentPhoneNumberId,
     toNumber: followup.destinatarioPhone,
     callRecordingEnabled: env.callRecordingEnabled,
+    // Los numeros salen de la REVALIDACION (dato fresco del Semaforo), no del contexto
+    // guardado en el FOLLOWUP, que puede tener horas de antiguedad.
     dynamicVariables: buildAgentDynamicVariables({
       clientName: followup.contexto.clientName,
       courseName: followup.contexto.courseName,
       orderNumber: followup.contexto.orderNumber,
       motivo: followup.motivo,
+      contactoNombre: evaluation.contactoNombre,
+      diasRestantes: evaluation.diasRestantes,
+      pctConexion: evaluation.group.pctConexion,
     }),
   });
 

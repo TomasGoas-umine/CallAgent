@@ -143,7 +143,7 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
           pctConexion: Number(e.group.pctConexion.toFixed(1)),
           inscritos: e.group.enrolledCount,
           conectados: e.group.totalConnections,
-          diasRestantes: diasRestantes(e.group.endCourse),
+          diasRestantes: e.diasRestantes,
           contacto: {
             // Campos SINTETICOS del fixture — no existen en tablero-api real (ver UV-024).
             nombre: primero?.contacto_nombre ?? null,
@@ -185,6 +185,9 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
             courseName: e.group.courseName,
             orderNumber: e.group.orderNumber,
             motivo: MOTIVO_RIESGO_CONEXION,
+            contactoNombre: e.contactoNombre,
+            diasRestantes: e.diasRestantes,
+            pctConexion: e.group.pctConexion,
           }),
           /** Cosas que el operador deberia ver antes de llamar, sin que bloqueen el boton. */
           advertencias: [
@@ -371,12 +374,4 @@ function parseJsonBody(raw: unknown): CreateCallBody | null {
   } catch {
     return null;
   }
-}
-
-/** Dias que le quedan al curso (negativo si ya termino). */
-function diasRestantes(endCourse: string, now: Date = new Date()): number {
-  const end = new Date(`${endCourse}T00:00:00.000Z`).getTime();
-  if (!Number.isFinite(end)) return 0;
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.round((end - today) / (24 * 60 * 60 * 1000));
 }

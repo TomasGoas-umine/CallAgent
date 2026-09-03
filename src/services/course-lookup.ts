@@ -18,11 +18,29 @@ export interface CourseEvaluation {
   group: OrderGroup;
   semana: CourseWeek;
   nivel: UrgencyLevel;
+  /** Dias que le quedan al curso (negativo si ya termino). */
+  diasRestantes: number;
+  /** Contacto del curso — dato SINTETICO del fixture, no existe en tablero-api (UV-024). */
+  contactoNombre: string | null;
+}
+
+/** Dias hasta `endCourse`, contra la medianoche UTC de hoy. */
+export function diasRestantes(endCourse: string, now: Date = new Date()): number {
+  const end = new Date(`${endCourse}T00:00:00.000Z`).getTime();
+  if (!Number.isFinite(end)) return 0;
+  const hoy = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((end - hoy) / (24 * 60 * 60 * 1000));
 }
 
 function evaluate(group: OrderGroup): CourseEvaluation {
   const semana = getCourseWeek(group.initCourse, group.endCourse);
-  return { group, semana, nivel: clasificarConexion(semana, group.pctConexion) };
+  return {
+    group,
+    semana,
+    nivel: clasificarConexion(semana, group.pctConexion),
+    diasRestantes: diasRestantes(group.endCourse),
+    contactoNombre: group.records[0]?.contacto_nombre ?? null,
+  };
 }
 
 /** Todos los cursos de la seccion A del Semaforo, ya agrupados y clasificados. */
