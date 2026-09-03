@@ -53,3 +53,25 @@ sin importar cuando se ejecute el test suite.
 
 Payloads de ejemplo usados por los tests de los webhooks (ver `test/integration/`). No son
 datos reales — construidos siguiendo la forma documentada de cada proveedor.
+
+## Fechas relativas (`_fixture_offset_*_days`) — leer antes de tocar el fixture
+
+Desde 2026-09-03 las fechas del fixture **no se usan tal como estan en el JSON**. Cada
+registro lleva:
+
+- `_fixture_offset_init_days` — dias (relativos a la medianoche UTC de hoy) para `init_course`
+- `_fixture_offset_end_days` — idem para `end_course`
+- `_fixture_offset_updated_days` — idem para `updated_at`
+- `_fixture_semana_objetivo` — la semana de curso (1-4) que ese grupo debe reproducir
+
+`FixtureTableroApiClient.search()` reescribe los tres campos en cada llamada. Los offsets usan
+una duracion de curso fija de 28 dias y colocan "hoy" en el CENTRO de la banda de semana
+objetivo (progreso 0.125 / 0.375 / 0.625 / 0.875), asi que la clasificacion nunca queda en un
+borde y el fixture no envejece. Ver `docs/architecture/DECISIONS.md` ADR-009 y
+`docs/status/INVENTARIO-2026-09-03.md` (el bug que motivo el cambio).
+
+Los valores absolutos de `init_course`/`end_course` que siguen en el JSON son el dato de
+referencia historico de la auditoria — informativos, no funcionales.
+
+**Si agregas un grupo:** ponle los cuatro campos `_fixture_*` de arriba usando los offsets de
+la banda que quieras (`1: -4`, `2: -11`, `3: -18`, `4: -25`, y `end = init + 28`).

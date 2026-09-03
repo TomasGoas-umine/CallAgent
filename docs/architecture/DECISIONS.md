@@ -186,3 +186,36 @@ innecesario para un solo paquete como este). Jest (mas maduro/extendido, pero re
 **Consecuencias.** `npm test` / `npm run test:unit` / `npm run test:integration` corren sobre
 Vitest; el `tsx --env-file=.env` de los scripts locales usa una capacidad nativa de Node 20+
 (no se agrego `dotenv` como dependencia).
+
+---
+
+## ADR-009 — Fechas del fixture relativas a "hoy", no absolutas
+
+**Contexto.** El fixture `tablero_search_sample.json` se genero con fechas absolutas centradas
+en `FIXTURE_REFERENCE_NOW` (`2026-08-13`). `getCourseWeek` calcula el progreso del curso
+contra `Date.now()`, asi que las fechas absolutas envejecen: corriendo el 2026-09-03 (tres
+semanas despues) 4 de los 13 grupos ya se reclasificaban solos (dos ALERTA y dos NORMAL
+pasaron a CRITICO), el evaluador agotaba `DAILY_QUOTA` antes de llegar al grupo del demo y
+`npm run local:demo` fallaba. Los 92 tests seguian verdes porque pinean el reloj con
+`vi.setSystemTime` — la deriva era invisible para la suite y solo la detectaba el demo.
+
+**Decision.** Los registros del fixture llevan `_fixture_offset_init_days`,
+`_fixture_offset_end_days` y `_fixture_offset_updated_days` (dias relativos a la medianoche UTC
+de hoy), y `FixtureTableroApiClient` reescribe `init_course` / `end_course` / `updated_at` en
+cada `search()`. Los offsets se eligieron con una duracion de curso fija de 28 dias de forma
+que "hoy" caiga en el CENTRO de la banda de semana objetivo (progreso 0.125 / 0.375 / 0.625 /
+0.875), nunca en un borde. La semana objetivo de cada grupo es la que documenta
+`semana_curso` en `semaforo_test_samples.csv`.
+
+**Alternativas.** (a) Regenerar el fixture a mano cada tanto — vuelve a derivar y depende de
+que alguien se acuerde. (b) Pinear el reloj tambien en el demo y en el micrositio — esconde el
+problema y hace que la UI muestre datos que no corresponden a la fecha que ve el operador.
+(c) Guardar las fechas absolutas y ajustar los umbrales — cambiaria la logica de negocio
+portada 1:1 del Semaforo, prohibido.
+
+**Consecuencias.** La clasificacion del fixture es estable corra cuando corra, sin mantenimiento.
+Los tests que pinean el reloj siguen deterministas (los offsets se resuelven contra el reloj
+pineado). El campo `init_course`/`end_course` del JSON queda como valor de referencia
+historico (el dato real de la auditoria) pero **no es lo que devuelve el cliente** — quien lea
+el JSON a mano debe mirar los offsets. `HttpTableroApiClient` no se ve afectado: los offsets
+son exclusivos del fixture.

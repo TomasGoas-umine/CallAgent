@@ -18,26 +18,31 @@ local, **verificado con `npm run local:demo`**, 92 tests pasando, lint/build lim
 ## Qué se construyó
 
 **Lógica de dominio** (portada 1:1 desde el Semáforo real, sin reimplementar):
+
 - `urgency-classifier.ts` — clasificación de urgencia por semana de curso.
 - `order-status-promoter.ts` — promoción de estado de OC + agregación por grupo.
 
 **Integración con el Semáforo:**
+
 - `TableroApiClient` como interfaz; `FixtureTableroApiClient` (default) lee un fixture de 142
   registros/13 grupos; `HttpTableroApiClient` construido pero **inactivo** — el tablero-api real
   no expone teléfono en ningún punto de la cadena de datos.
 
 **Persistencia (DynamoDB single-table):**
+
 - `base-repository.ts` + repos de `followup`/`contact`/`idempotency`, con GSI1/GSI2.
 - Item extra no pedido en el prompt original: `CONVERSATION#<id> META` para poder correlacionar
   el webhook de ElevenLabs (que solo trae `conversation_id`) con el `followup_id` interno.
 
 **Guardrails y control de llamadas:**
+
 - Ventana horaria, allowlist, cuota diaria, kill switch (`guardrails.ts`).
 - `idempotency.ts` — clave `sha256(destinatario+motivo+order_number+ventana_semanal)`.
 - Cola en memoria (`queue.ts`) con concepto de `MessageGroupId`, pensada para migrar a SQS FIFO
   real sin cambiar el contrato.
 
 **Integración de voz:**
+
 - `ElevenLabsClient` real + mock (el real nunca se activa por omisión, solo con
   `MOCK_PROVIDERS=false` + allowlist no vacía).
 - Validador de firma HMAC de ElevenLabs (tolerancia 30 min, comparación en tiempo constante).
@@ -45,6 +50,7 @@ local, **verificado con `npm run local:demo`**, 92 tests pasando, lint/build lim
 - `call-outcome-classifier.ts` — taxonomía centralizada de 12 valores de resultado de llamada.
 
 **Los 3 handlers Lambda del MVP:**
+
 1. `candidate-evaluator` — lee el fixture, clasifica, aplica guardrails, crea FOLLOWUP, encola.
 2. `call-dispatcher` — revalida contra el Semáforo, guardrails, anti doble disparo, dispara la
    llamada con reintentos y backoff.
@@ -54,17 +60,20 @@ local, **verificado con `npm run local:demo`**, 92 tests pasando, lint/build lim
    reconciliación real todavía (TODO explícito en el código, ver "Pendiente" abajo).
 
 **Entorno local y demo end-to-end:**
+
 - `docker-compose.local.yml` (para cuando haya Docker) + fallback con `dynalite` (usado en esta
   sesión porque el sandbox no tenía Docker).
 - Server Fastify local + seed + `npm run local:demo`, verificado corriendo de forma repetible.
 
 **Infraestructura y CI:**
+
 - Esqueleto CDK v2 en `infra/` (tabla → Lambda factory → rutas → IAM) — **construido, no
   desplegado, no sintetizado**.
 - GitHub Actions (`ci.yml`): lint, prettier check, `tsc --noEmit`, tests, validación de
   Conventional Commits — verificado localmente, no corrió en un push real todavía.
 
 **Documentación:**
+
 - BPMN (4 diagramas), `PROJECT_CONTEXT.md`, `ARCHITECTURE.md`, `DECISIONS.md` (8 ADRs),
   `CLAUDE.md`, `docs/spec.csv`.
 
