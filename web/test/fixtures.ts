@@ -1,0 +1,91 @@
+import type { CursoTablero, Health, LlamadaResumen } from '../src/types';
+
+export const HEALTH_OK: Health = {
+  status: 'ok',
+  killSwitch: false,
+  dryRun: false,
+  mockProviders: true,
+  tableroApiMode: 'fixture',
+  cuota: { dateKey: '2026-09-03', usados: 1, limite: 5, restantes: 4 },
+  ventanaHoraria: {
+    inicio: '09:00',
+    fin: '19:00',
+    timezone: 'America/Santiago',
+    abiertaAhora: true,
+  },
+  allowlist: [{ value: '+56900100141', masked: '***0141' }],
+  disparoAutomatico: false,
+};
+
+export const CURSO_CRITICO: CursoTablero = {
+  clientId: 'client_test_demo',
+  clientName: 'TEST DEMO · CLIENTE DUMMY',
+  orderNumber: 'TEST-9600',
+  courseName: 'CURSO DUMMY TEST DEMO CONEXION',
+  initCourse: '2026-08-16',
+  endCourse: '2026-09-13',
+  orderStatus: 'CURSO EN OPERACIÓN',
+  semana: 3,
+  nivel: 'CRITICO',
+  pctConexion: 0,
+  inscritos: 10,
+  conectados: 0,
+  diasRestantes: 10,
+  contacto: { nombre: 'TEST · Marcela Bravo', cargo: 'Encargada de Capacitacion' },
+  telefono: {
+    masked: '***0141',
+    disponible: true,
+    enAllowlist: true,
+    doNotCall: false,
+    ultimoContactoAt: null,
+  },
+  llamable: true,
+  variablesAgente: {
+    nombre_cliente: 'TEST DEMO · CLIENTE DUMMY',
+    curso: 'CURSO DUMMY TEST DEMO CONEXION',
+    orden_compra: 'TEST-9600',
+    motivo: 'riesgo_conexion_critico',
+  },
+  advertencias: [],
+};
+
+export const CURSO_NORMAL: CursoTablero = {
+  ...CURSO_CRITICO,
+  clientId: 'client_test_normal_s1',
+  clientName: 'TEST NORMAL · CLIENTE DUMMY S1',
+  orderNumber: 'TEST-9104',
+  courseName: 'CURSO DUMMY TEST NORMAL CONEXION',
+  semana: 1,
+  nivel: 'NORMAL',
+  pctConexion: 25,
+  conectados: 5,
+  diasRestantes: 24,
+  telefono: { ...CURSO_CRITICO.telefono, masked: '***0016', enAllowlist: false },
+  llamable: false,
+};
+
+export const LLAMADA_RESUELTA: LlamadaResumen = {
+  followupId: 'followup-1',
+  estado: 'RESUELTO',
+  motivo: 'riesgo_conexion_critico',
+  prioridad: 'ALTA',
+  origen: 'manual',
+  requestedBy: 'tomas.goas@umine.com',
+  orderNumber: 'TEST-9600',
+  courseName: 'CURSO DUMMY TEST DEMO CONEXION',
+  clientName: 'TEST DEMO · CLIENTE DUMMY',
+  telefonoMasked: '***0141',
+  intentos: 0,
+  nextAttemptAt: null,
+  createdAt: '2026-09-03T15:00:00.000Z',
+  updatedAt: '2026-09-03T15:01:00.000Z',
+  totalLlamadas: 1,
+  resultado: {
+    conversationId: 'conv_mock_1',
+    outcome: 'resolved',
+    status: 'done',
+    durationSeconds: 95,
+    endedAt: '2026-09-03T15:01:00.000Z',
+    camposExtraidos: { motivo_no_conexion: 'olvido_conectarse', tiene_bloqueo_tecnico: false },
+  },
+};
