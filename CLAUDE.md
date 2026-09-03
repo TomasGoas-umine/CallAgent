@@ -38,6 +38,15 @@ npm run local:seed           # siembra CONTACT.do_not_call para el escenario de 
 npm run local:server         # levanta el server Fastify (puerto LOCAL_SERVER_PORT, default 3000)
 npm run local:demo           # corre el flujo end-to-end contra el server (requiere que ya este arriba)
 npm run local:down           # detiene DynamoDB local
+
+# Fixture del Semaforo (NO editar el JSON a mano)
+npm run fixture:generate     # regenera test/fixtures/tablero_search_sample.json
+
+# Micrositio de operacion (web/)
+npm run web:install
+npm run web:dev              # Vite en :5173, proxea /api al server local
+npm run web:build            # tsc --noEmit + vite build
+npm run web:test             # vitest + jsdom
 ```
 
 ### Nota sobre DynamoDB local: Docker vs `dynalite`
@@ -83,8 +92,41 @@ desarrollo, es valido ampliar temporalmente `BUSINESS_HOURS_START=00:00` /
 `BUSINESS_HOURS_END=23:59` en tu `.env` local — **nunca hagas esto en un entorno que se acerque
 a produccion real**, ahi el guardrail debe reflejar el horario real acordado con negocio.
 
+## Operar a mano: la API y el micrositio
+
+El camino que se usa en el dia a dia es el manual:
+
+```bash
+npm run local:up && npm run local:create-tables && npm run local:seed
+npm run local:server         # API en :3000
+npm run web:dev              # micrositio en :5173 (en otra terminal)
+```
+
+- `src/local/api-routes.ts` — plugin de Fastify con `/api/health`, `/api/tablero`,
+  `/api/calls`, `/api/calls/:id` y `POST /api/calls`. Es un **adaptador**: no decide nada de
+  negocio, solo traduce HTTP y mapea el `status` tipado de `originateManualCall` a un codigo
+  (403 / 429 / 503 / ...). Si necesitas una regla nueva, va en el servicio, no en la ruta.
+- `src/services/manual-call.ts` — el disparo manual. No reimplementa guardrails: delega en
+  `dispatchFollowup`, que revalida todo por su cuenta.
+- `web/` — micrositio React + Vite, paquete independiente (su propio `package.json` y
+  `node_modules`, no importa nada de `../src`). Ver `web/README.md` antes de tocarlo: hay
+  decisiones deliberadas ahi (sin router, assets relativos, sin polling, telefono siempre
+  enmascarado, cero input libre de telefono, modal de confirmacion obligatorio).
+
+**La cuota diaria es persistente** (`QuotaRepository`, `QUOTA#<fecha> COUNTER` con `ADD`
+condicional atomico) y la consume el dispatcher justo despues de la escritura condicional
+READY->DIALING. No la cuentes en memoria en ningun lugar nuevo. Cuenta llamadas **originadas**,
+no minutos (ver UV-044).
+
 ## Reglas de seguridad (no negociables)
 
+0. **Ninguna llamada se dispara sola.** El plan de voz es Starter (muy pocos minutos). No
+   agregues cron, scheduler, polling, worker de cola ni reintentos automaticos. La unica
+   originacion es `POST /api/calls` -> `originateManualCall` -> `dispatchFollowup`, una vez por
+   cada vez que un humano aprieta el boton. El `candidate-evaluator` existe y se puede correr a
+   mano, pero **su disparador no se habilita**. Ver `docs/architecture/DECISIONS.md` ADR-010.
+   `infra/` todavia declara una `events.Rule` de cron: hay que deshabilitarla antes de
+   desplegar (UV-042).
 1. **Nunca llames de verdad a Twilio/ElevenLabs.** `MOCK_PROVIDERS=true` es el default en
    local y en tests. Si se activa `MOCK_PROVIDERS=false`, `elevenlabs-client.factory.ts` exige
    ademas `ALLOWLIST_NUMBERS` no vacia — nunca se activa el cliente real por omision.
@@ -116,9 +158,21 @@ a produccion real**, ahi el guardrail debe reflejar el horario real acordado con
   usan `vi.useFakeTimers({ toFake: ['Date'] })` — **nunca fakear todos los timers** cuando el
   test tambien habla por HTTP con `dynalite` (fakear `setTimeout`/`setImmediate` cuelga las
   requests indefinidamente).
-- Las fechas sinteticas de `test/fixtures/tablero_search_sample.json` estan centradas en
-  `FIXTURE_REFERENCE_NOW` (`test/fixtures/reference-time.ts`) con bandas anchas (~21 dias) para
-  tolerar la deriva del reloj real — ver `test/fixtures/README.md` antes de tocar ese fixture.
+- `test/fixtures/tablero_search_sample.json` **se genera** (`npm run fixture:generate`, ver
+  `scripts/generate-fixture.ts`). No lo edites a mano: son ~200 registros por alumno cuyo
+  `pct_conexion` y semana de curso tienen que caer en bandas exactas. Sus fechas son
+  **relativas a hoy** (`_fixture_offset_*_days`), no absolutas — ADR-009.
+- Los cursos CRITICO del fixture declaran `_fixture_allowlist_slot` y el cliente resuelve su
+  `phone_test_only` contra `ALLOWLIST_NUMBERS` en tiempo de lectura, para que el micrositio
+  muestre un numero realmente llamable. Los ALERTA/NORMAL llevan numeros obviamente falsos.
+- Las `dynamic_variables` del agente viven en `src/services/agent-variables.ts` — las usa el
+  dispatcher al llamar y las expone `GET /api/tablero`, para que el modal de confirmacion
+  muestre exactamente lo que se va a enviar. No las armes en el front.
+- `docs/status/` guarda los inventarios de estado del repo (que corre, que es stub, que se
+  arreglo). `docs/status/INVENTARIO-2026-09-03.md` es el mas reciente.
+- `FIXTURE_REFERENCE_NOW` (`test/fixtures/reference-time.ts`) sigue siendo el "ahora" al que
+  los tests pinean el reloj, pero ya **no** es el ancla de las fechas del fixture: los offsets se
+  resuelven contra el reloj vigente (pineado o real). Ver `test/fixtures/README.md`.
 
 ## Flujo de testing
 
@@ -128,13 +182,24 @@ a produccion real**, ahi el guardrail debe reflejar el horario real acordado con
   escrituras condicionales, GSIs, y los 3 handlers completos (evaluator/dispatcher/webhook).
 - **Nunca** un test llama de verdad a Twilio/ElevenLabs — siempre `MockElevenLabsClient` o
   fixtures.
-- Antes de un PR: `npm run build && npm run lint && npm run format:check && npm test`.
+- **API** (`test/integration/api-routes.spec.ts`): usa `fastify.inject()`, sin abrir puerto.
+  Cada test de rechazo verifica ademas que el proveedor NO se invoco y que la cuota no se movio.
+- **Front** (`web/test/`): vitest + jsdom + testing-library. El test central es que el
+  micrositio **no dispara sin pasar por el modal de confirmacion**.
+- Si inyectas repositorios en un test del dispatcher, inyecta **todos** los que usa
+  (`followupRepository` Y `quotaRepository`): el que falte se instancia contra
+  `env.tableName` + `DYNAMODB_ENDPOINT` reales y el test deja de estar aislado.
+- Antes de un PR: `npm run build && npm run lint && npm run format:check && npm test` y, si
+  tocaste `web/`, `npm run web:build && npm run web:test`.
 
 ## Decisiones arquitectonicas vigentes (resumen — detalle completo en `docs/architecture/DECISIONS.md`)
 
 - Integracion ElevenLabs<->Twilio nativa (Opcion A) — sin servidores WebSocket persistentes.
 - `TableroApiClient` en modo fixture por defecto — el real (`tablero-api`) no expone telefono.
 - Cola en memoria en vez de SQS FIFO/ElasticMQ para el MVP local.
+- **ADR-009**: las fechas del fixture son relativas a hoy (el fixture no envejece).
+- **ADR-010**: originacion solo manual — sin cron, scheduler, polling ni reintentos
+  automaticos; cuota diaria persistente y atomica.
 - Varias decisiones de negocio (a quien llamar, disclosure de IA, grabacion, numero chileno)
   siguen **abiertas** — modeladas como configuracion, nunca hardcodeadas. Ver prompt §9 y
   `docs/spec.csv` (tickets UV-023 a UV-028).

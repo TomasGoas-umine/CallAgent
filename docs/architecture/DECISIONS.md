@@ -219,3 +219,60 @@ pineado). El campo `init_course`/`end_course` del JSON queda como valor de refer
 historico (el dato real de la auditoria) pero **no es lo que devuelve el cliente** — quien lea
 el JSON a mano debe mirar los offsets. `HttpTableroApiClient` no se ve afectado: los offsets
 son exclusivos del fixture.
+
+---
+
+## ADR-010 — Ninguna llamada se dispara sola: originacion solo manual
+
+**Contexto.** El plan de voz es **Starter**: muy pocos minutos disponibles. El esqueleto
+original estaba pensado para el flujo automatico del BPMN (cron -> `candidate-evaluator` ->
+cola -> `call-dispatcher`), que en una sola corrida puede crear y encolar tantos FOLLOWUP como
+cursos CRITICO haya en el Semaforo. Con esa cuota, cualquier automatismo — un cron, un worker
+de cola, un reintento con backoff, un poller de reconciliacion — es un riesgo de consumir el
+plan completo sin que nadie lo decida.
+
+**Decision.** La unica forma de originar una llamada es que una persona la dispare:
+`POST /api/calls` -> `originateManualCall` -> `dispatchFollowup`. Concretamente:
+
+1. **No se habilita ningun disparador automatico.** No hay cron, ni scheduler, ni polling, ni
+   worker de cola, ni reintentos automaticos en el camino manual. `sharedLocalQueue` solo se
+   drena si alguien hace `POST /internal/dispatcher/*` a mano.
+2. **El micrositio no hace polling.** Los datos se refrescan al montar y despues solo con el
+   boton (ver `web/README.md`).
+3. **La cuota diaria es persistente y atomica** (`QuotaRepository`, `QUOTA#<fecha> COUNTER` con
+   `ADD` condicional). Antes `guardrails.isDailyQuotaExceeded` recibia el contador por
+   parametro y nadie lo calculaba: el evaluador contaba en memoria (`createdToday`), asi que
+   reiniciar el proceso reiniciaba la cuota. Eso no sirve cuando la cuota es lo unico que
+   separa un bug de una factura.
+4. **El disparo manual no se saltea ningun guardrail.** Delega en el mismo
+   `dispatchFollowup` del flujo automatico, que revalida el Semaforo, revalida guardrails,
+   consume cuota de forma atomica y hace la escritura condicional READY->DIALING. El
+   pre-chequeo del servicio manual existe solo para poder responder con un motivo preciso
+   (403 / 429 / 503) _antes_ de crear un FOLLOWUP o quemar la idempotency key.
+5. **La idempotency key de `POST /api/calls` es obligatoria** y la elige el cliente. El
+   micrositio la genera al ABRIR el modal de confirmacion, no al confirmar: un doble click
+   manda la misma key y el backend responde `already_processed` sin originar una segunda
+   llamada.
+
+El `candidate-evaluator` **no se borro**: sigue siendo el flujo del BPMN aprobado y se puede
+correr a mano (`npm run local:demo`, `POST /internal/evaluator`). Lo que no se habilita es su
+disparador.
+
+**Alternativas.** (a) Dejar el cron con una cuota muy baja — la cuota protege el gasto pero no
+el criterio: seguiria llamando a quien el clasificador elija, sin que nadie lo mire.
+(b) Un modo "aprobacion" donde el evaluador propone y un humano confirma en lote — es a donde
+esto deberia ir cuando el plan lo permita, pero agrega una cola de aprobaciones que hoy no
+hace falta. (c) Borrar el evaluador — se perderia el flujo ya modelado y aprobado en el BPMN.
+
+**Consecuencias.** El sistema no descubre urgencias por si solo: alguien tiene que abrir el
+micrositio. Es una limitacion **elegida**, no un descuido — el tablero esta justamente para
+que ese "alguien" vea en 5 segundos que cursos estan CRITICO. Dos deudas quedan anotadas:
+`infra/` todavia declara la `events.Rule` de cron y hay que deshabilitarla antes de cualquier
+despliegue (UV-042), y el conteo en memoria del evaluador deberia unificarse con
+`QuotaRepository` (UV-045).
+
+**Nota sobre que mide la cuota.** `DAILY_QUOTA` cuenta llamadas ORIGINADAS, no minutos: los
+minutos reales solo se conocen cuando llega el webhook post-call, y para entonces ya se
+gastaron. Contar originaciones es la aproximacion conservadora (una llamada que el proveedor
+rechaza tambien consume cuota). Si negocio necesita un tope en minutos, es un ticket aparte
+(UV-044).
