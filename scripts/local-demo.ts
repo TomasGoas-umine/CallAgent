@@ -15,6 +15,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { env } from '../src/utils/env.js';
 import { computeIdempotencyKey } from '../src/services/idempotency.js';
+import { businessDateKey } from '../src/utils/scheduling.js';
 import { generateTestSignatureHeader } from '../src/auth/elevenlabs-signature-validator.js';
 
 const BASE_URL = `http://localhost:${env.localServerPort}`;
@@ -84,6 +85,14 @@ async function resetDemoState(): Promise<void> {
     new DeleteCommand({
       TableName: env.tableName,
       Key: { PK: `CONTACT#${DEMO_PHONE}`, SK: 'META' },
+    }),
+  );
+  // El contador de cuota diaria es persistente (por diseno, ver QuotaRepository): sin esto el
+  // demo se auto-bloquea con 'cuota_diaria_alcanzada' a la quinta corrida del dia.
+  await doc.send(
+    new DeleteCommand({
+      TableName: env.tableName,
+      Key: { PK: `QUOTA#${businessDateKey()}`, SK: 'COUNTER' },
     }),
   );
 }

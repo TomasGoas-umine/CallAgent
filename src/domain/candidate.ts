@@ -36,6 +36,14 @@ export interface TableroRecord {
    * TABLERO_API_MODE=fixture. Ver DECISIONS.md ADR-004.
    */
   phone_test_only?: string;
+  /**
+   * Contacto del curso — tambien SINTETICO (tablero-api no lo expone). En el fixture van
+   * prefijados con `TEST ·` a proposito: hay cursos con nombre de cliente real y un nombre de
+   * persona inventado sin marca podria leerse como dato real. El cargo NO resuelve la pregunta
+   * abierta UV-023 (a quien se llama): es solo relleno para poder mostrar la columna.
+   */
+  contacto_nombre?: string;
+  contacto_cargo?: string;
 }
 
 export interface TableroSearchFilters {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FollowupRepository } from '../../src/repositories/followup-repository.js';
+import { QuotaRepository } from '../../src/repositories/quota-repository.js';
 import { MockElevenLabsClient } from '../../src/services/elevenlabs-client.js';
 import { FixtureTableroApiClient } from '../../src/services/tablero-api-client.fixture.js';
 import {
@@ -55,10 +56,21 @@ async function freshDispatcher() {
   return import('../../src/handlers/call-dispatcher/handler.js');
 }
 
-async function freshFollowupRepository(): Promise<FollowupRepository> {
+/**
+ * Tabla propia por test. Se devuelven TODOS los repositorios que el dispatcher usa
+ * (followups y cuota): si alguno no se inyecta, el dispatcher instancia el suyo contra
+ * `env.tableName` + `DYNAMODB_ENDPOINT` reales y el test deja de estar aislado.
+ */
+async function freshRepos(): Promise<{
+  followupRepository: FollowupRepository;
+  quotaRepository: QuotaRepository;
+}> {
   const tableName = `dispatcher-test-${randomUUID()}`;
   await createTestTable(serverHarness.client, tableName);
-  return new FollowupRepository(tableName, serverHarness.doc);
+  return {
+    followupRepository: new FollowupRepository(tableName, serverHarness.doc),
+    quotaRepository: new QuotaRepository(tableName, serverHarness.doc),
+  };
 }
 
 function makeFollowup(overrides: Partial<Followup> = {}): Followup {
@@ -94,12 +106,13 @@ function makeFollowup(overrides: Partial<Followup> = {}): Followup {
 describe('call-dispatcher', () => {
   it('llama con exito (mock) y guarda conversation_id/callSid, deja el followup en DIALING', async () => {
     const { dispatchFollowup } = await freshDispatcher();
-    const followupRepository = await freshFollowupRepository();
+    const { followupRepository, quotaRepository } = await freshRepos();
     const followup = makeFollowup();
     await followupRepository.create(followup);
 
     const result = await dispatchFollowup(followup.followupId, {
       followupRepository,
+      quotaRepository,
       tableroClient: new FixtureTableroApiClient(),
       elevenLabsClient: new MockElevenLabsClient('success'),
     });
@@ -119,7 +132,7 @@ describe('call-dispatcher', () => {
 
   it('revalida contra el Semaforo: si ya no es CRITICO, cierra sin llamar', async () => {
     const { dispatchFollowup } = await freshDispatcher();
-    const followupRepository = await freshFollowupRepository();
+    const { followupRepository, quotaRepository } = await freshRepos();
     const followup = makeFollowup({
       contexto: {
         clientId: NORMAL_CLIENT_ID,
@@ -136,6 +149,7 @@ describe('call-dispatcher', () => {
 
     const result = await dispatchFollowup(followup.followupId, {
       followupRepository,
+      quotaRepository,
       tableroClient: new FixtureTableroApiClient(),
       elevenLabsClient: new MockElevenLabsClient('success'),
     });
@@ -148,7 +162,7 @@ describe('call-dispatcher', () => {
 
   it('revalida contra el Semaforo: si la OC ya no aparece, cierra sin llamar', async () => {
     const { dispatchFollowup } = await freshDispatcher();
-    const followupRepository = await freshFollowupRepository();
+    const { followupRepository, quotaRepository } = await freshRepos();
     const followup = makeFollowup({
       contexto: {
         clientId: 'client_no_existe',
@@ -165,6 +179,7 @@ describe('call-dispatcher', () => {
 
     const result = await dispatchFollowup(followup.followupId, {
       followupRepository,
+      quotaRepository,
       tableroClient: new FixtureTableroApiClient(),
       elevenLabsClient: new MockElevenLabsClient('success'),
     });
@@ -176,12 +191,13 @@ describe('call-dispatcher', () => {
   it('kill switch activo bloquea la llamada', async () => {
     process.env.KILL_SWITCH = 'true';
     const { dispatchFollowup } = await freshDispatcher();
-    const followupRepository = await freshFollowupRepository();
+    const { followupRepository, quotaRepository } = await freshRepos();
     const followup = makeFollowup();
     await followupRepository.create(followup);
 
     const result = await dispatchFollowup(followup.followupId, {
       followupRepository,
+      quotaRepository,
       tableroClient: new FixtureTableroApiClient(),
       elevenLabsClient: new MockElevenLabsClient('success'),
     });
@@ -193,12 +209,13 @@ describe('call-dispatcher', () => {
   it('numero fuera de la allowlist bloquea la llamada', async () => {
     process.env.ALLOWLIST_NUMBERS = '+56900000000'; // no incluye DEMO_PHONE
     const { dispatchFollowup } = await freshDispatcher();
-    const followupRepository = await freshFollowupRepository();
+    const { followupRepository, quotaRepository } = await freshRepos();
     const followup = makeFollowup();
     await followupRepository.create(followup);
 
     const result = await dispatchFollowup(followup.followupId, {
       followupRepository,
+      quotaRepository,
       tableroClient: new FixtureTableroApiClient(),
       elevenLabsClient: new MockElevenLabsClient('success'),
     });
@@ -209,7 +226,7 @@ describe('call-dispatcher', () => {
 
   it('fuera de la ventana horaria reagenda para la proxima ventana habil', async () => {
     const { dispatchFollowup } = await freshDispatcher();
-    const followupRepository = await freshFollowupRepository();
+    const { followupRepository, quotaRepository } = await freshRepos();
     const followup = makeFollowup();
     await followupRepository.create(followup);
 
@@ -218,6 +235,7 @@ describe('call-dispatcher', () => {
 
     const result = await dispatchFollowup(followup.followupId, {
       followupRepository,
+      quotaRepository,
       tableroClient: new FixtureTableroApiClient(),
       elevenLabsClient: new MockElevenLabsClient('success'),
       now: outsideHours,
@@ -231,12 +249,13 @@ describe('call-dispatcher', () => {
 
   it('anti doble disparo: un segundo dispatch sobre el mismo followup ya DIALING es obsoleto', async () => {
     const { dispatchFollowup } = await freshDispatcher();
-    const followupRepository = await freshFollowupRepository();
+    const { followupRepository, quotaRepository } = await freshRepos();
     const followup = makeFollowup();
     await followupRepository.create(followup);
 
     const deps = {
       followupRepository,
+      quotaRepository,
       tableroClient: new FixtureTableroApiClient(),
       elevenLabsClient: new MockElevenLabsClient('success'),
     };
@@ -250,7 +269,7 @@ describe('call-dispatcher', () => {
 
   it('error del proveedor reintenta hasta MAX_ATTEMPTS y luego marca AGOTADO', async () => {
     const { dispatchFollowup } = await freshDispatcher();
-    const followupRepository = await freshFollowupRepository();
+    const { followupRepository, quotaRepository } = await freshRepos();
 
     // intentos=2 (MAX_ATTEMPTS=3): este es el ultimo intento permitido.
     const followup = makeFollowup({ intentos: 2 });
@@ -258,6 +277,7 @@ describe('call-dispatcher', () => {
 
     const result = await dispatchFollowup(followup.followupId, {
       followupRepository,
+      quotaRepository,
       tableroClient: new FixtureTableroApiClient(),
       elevenLabsClient: new MockElevenLabsClient('error'),
     });
@@ -270,12 +290,13 @@ describe('call-dispatcher', () => {
 
   it('error del proveedor con intentos restantes programa reintento con backoff', async () => {
     const { dispatchFollowup } = await freshDispatcher();
-    const followupRepository = await freshFollowupRepository();
+    const { followupRepository, quotaRepository } = await freshRepos();
     const followup = makeFollowup({ intentos: 0 });
     await followupRepository.create(followup);
 
     const result = await dispatchFollowup(followup.followupId, {
       followupRepository,
+      quotaRepository,
       tableroClient: new FixtureTableroApiClient(),
       elevenLabsClient: new MockElevenLabsClient('error'),
     });

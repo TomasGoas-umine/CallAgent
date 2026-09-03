@@ -22,7 +22,8 @@
     "local:create-tables": "tsx --env-file=.env scripts/create-local-tables.ts",
     "local:seed": "tsx --env-file=.env scripts/seed-local.ts",
     "local:server": "tsx --env-file=.env src/local/server.ts",
-    "local:demo": "tsx --env-file=.env scripts/local-demo.ts"
+    "local:demo": "tsx --env-file=.env scripts/local-demo.ts",
+    "fixture:generate": "tsx scripts/generate-fixture.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.649.0",
