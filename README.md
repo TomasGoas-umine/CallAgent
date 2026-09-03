@@ -85,7 +85,9 @@ Pendientes con los que hay que contar antes de dar esto por cerrado:
 | UV-043     | La API no tiene autenticacion                                                                                                                                      | No exponer mas alla de localhost hasta resolverlo                                                                                                                                                                         |
 | UV-027     | Twilio exige numeros `+56 600`/`+56 809` con KYC local en Chile                                                                                                    | Bloqueante externo antes de llamar a un cliente real                                                                                                                                                                      |
 
-Backlog completo en `docs/spec.csv`.
+Backlog completo en `docs/spec.csv`. Resumen completo del proyecto para pegar en otra
+herramienta (Claude en el navegador, onboarding, etc.):
+**`docs/context/ESTADO-PROYECTO.md`**.
 
 ## Llamadas reales (salir del modo simulacion)
 
