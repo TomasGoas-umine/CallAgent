@@ -1,21 +1,28 @@
-import type { CursoTablero, AllowlistEntry } from '../types';
+import type { CursoTablero } from '../types';
 
 /**
  * Modal de confirmacion. Es el ultimo paso obligatorio antes de originar una llamada: muestra a
- * QUIEN se llama y con QUE variables va a hablar el agente. Las variables NO se arman aca — se
- * muestran tal como las devuelve la API (`variablesAgente`), que las construye con el mismo
- * modulo que usa el dispatcher al llamar de verdad.
+ * QUIEN se llama, a QUE numero y con QUE variables va a hablar el agente. Las variables NO se
+ * arman aca — se muestran tal como las devuelve la API (`variablesAgente`), que las construye
+ * con el mismo modulo que usa el dispatcher al llamar de verdad.
+ *
+ * El numero se muestra COMPLETO (no enmascarado) a proposito: es el ultimo momento para que el
+ * operador se de cuenta de que se equivoco de numero.
  */
 export function ConfirmModal({
   curso,
   numero,
+  numeroAutorizado,
   mockProviders,
   enviando,
   onConfirmar,
   onCancelar,
 }: {
   curso: CursoTablero;
-  numero: AllowlistEntry;
+  /** Numero E.164 completo al que se va a llamar. */
+  numero: string;
+  /** `true` si esta en ALLOWLIST_NUMBERS. Si es `false`, el backend va a responder 403. */
+  numeroAutorizado: boolean;
   mockProviders: boolean;
   enviando: boolean;
   onConfirmar: () => void;
@@ -47,7 +54,14 @@ export function ConfirmModal({
             {curso.contacto.cargo ? ` — ${curso.contacto.cargo}` : ''}
           </span>
           <span className="uv-kv__k">Numero</span>
-          <span className="uv-mono">{numero.masked}</span>
+          <span className="uv-mono">
+            {numero}{' '}
+            {numeroAutorizado ? (
+              <span className="uv-badge uv-badge--normal">AUTORIZADO</span>
+            ) : (
+              <span className="uv-badge uv-badge--critico">NO AUTORIZADO</span>
+            )}
+          </span>
           <span className="uv-kv__k">Cliente</span>
           <span>{curso.clientName}</span>
           <span className="uv-kv__k">Curso</span>
@@ -70,6 +84,13 @@ export function ConfirmModal({
             </div>
           ))}
         </div>
+
+        {!numeroAutorizado ? (
+          <div className="uv-blocked">
+            <strong>{numero} no esta en ALLOWLIST_NUMBERS.</strong> El backend va a rechazar el
+            disparo con 403 sin llamar a nadie. Corrige el numero antes de confirmar.
+          </div>
+        ) : null}
 
         {curso.advertencias.length > 0 ? (
           <div className="uv-blocked">

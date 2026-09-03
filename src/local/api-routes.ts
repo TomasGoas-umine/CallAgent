@@ -95,9 +95,11 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
         timezone: env.timezone,
         abiertaAhora: isWithinBusinessHours(),
       },
-      // Los numeros se entregan enmascarados para mostrar en la UI, y con su valor para poder
-      // enviarlos de vuelta en POST /api/calls. El desplegable del micrositio se puebla SOLO
-      // con esta lista: nunca hay input libre de telefono.
+      // Los numeros autorizados van completos: son los del propio operador (los unicos que el
+      // guardrail deja marcar), y necesita verlos para saber a cual esta llamando. En el tablero
+      // los numeros de TERCEROS siguen enmascarados. El micrositio puebla su desplegable con
+      // esta lista, y ademas permite escribir un numero a mano — el guardrail de allowlist
+      // (backend) es el que decide, no el front.
       allowlist: env.allowlistNumbers.map((value) => ({ value, masked: maskPhone(value) })),
       /** El disparo automatico esta deliberadamente apagado (plan Starter). */
       disparoAutomatico: false,
@@ -138,13 +140,22 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
             cargo: primero?.contacto_cargo ?? null,
           },
           telefono: {
-            // Nunca se devuelve el numero completo: el micrositio no lo necesita (el
-            // desplegable de disparo se puebla desde la allowlist, no desde el tablero).
             masked: maskPhone(phone),
             disponible: Boolean(phone),
             enAllowlist: phone ? isNumberAllowed(phone) : false,
             doNotCall: contactRecord?.doNotCall ?? false,
             ultimoContactoAt: contactRecord?.lastContactedAt ?? null,
+            /**
+             * Numero completo del curso, para que el disparador pueda OFRECERLO como opcion y
+             * el operador pueda corregirlo a mano si esta mal (que es el caso normal: el
+             * telefono real no existe en la cadena de datos del Semaforo, ver UV-024).
+             *
+             * Solo se expone en modo fixture, donde `phone_test_only` es dato SINTETICO. Si
+             * algun dia `TABLERO_API_MODE=http` devuelve telefonos reales, este campo queda en
+             * null a proposito: exponer telefonos de terceros es una decision de privacidad que
+             * hay que tomar explicitamente, no heredar de este endpoint (ver UV-046).
+             */
+            valor: env.tableroApiMode === 'fixture' ? phone : null,
           },
           /**
            * `true` si el CURSO califica para una llamada (el unico caso de uso del MVP es

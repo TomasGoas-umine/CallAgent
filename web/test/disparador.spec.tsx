@@ -4,8 +4,13 @@
  * puede terminar en una llamada.
  *
  * Tambien cubre que el boton quede deshabilitado con la razon VISIBLE cuando falta cuota, hay
- * kill switch o el numero no esta en la allowlist — y que el desplegable de numeros se pueble
- * solo con la allowlist (nunca input libre).
+ * kill switch o el numero no esta en la allowlist.
+ *
+ * Sobre el input manual de telefono: el desplegable ofrece los numeros autorizados, el del
+ * Semaforo y la opcion de escribir uno a mano. Eso NO debilita la proteccion — el guardrail de
+ * allowlist vive en el backend. La invariante que se verifica aca es la que de verdad importa:
+ * un numero fuera de ALLOWLIST_NUMBERS (elegido o escrito) mantiene el boton bloqueado con la
+ * razon visible y NUNCA produce un POST.
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -46,7 +51,7 @@ describe('Disparador — confirmacion obligatoria', () => {
       screen.getByLabelText(/curso/i),
       `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
     );
-    await user.selectOptions(screen.getByLabelText(/numero/i), '+56900100141');
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '+56900100141');
 
     // Elegir en los desplegables no puede originar nada.
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -67,7 +72,7 @@ describe('Disparador — confirmacion obligatoria', () => {
       screen.getByLabelText(/curso/i),
       `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
     );
-    await user.selectOptions(screen.getByLabelText(/numero/i), '+56900100141');
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '+56900100141');
     await user.click(screen.getByRole('button', { name: /disparar llamada/i }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /cancelar/i }));
 
@@ -85,7 +90,7 @@ describe('Disparador — confirmacion obligatoria', () => {
       screen.getByLabelText(/curso/i),
       `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
     );
-    await user.selectOptions(screen.getByLabelText(/numero/i), '+56900100141');
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '+56900100141');
     await user.click(screen.getByRole('button', { name: /disparar llamada/i }));
     await user.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: /confirmar/i }),
@@ -120,18 +125,19 @@ describe('Disparador — confirmacion obligatoria', () => {
       screen.getByLabelText(/curso/i),
       `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
     );
-    await user.selectOptions(screen.getByLabelText(/numero/i), '+56900100141');
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '+56900100141');
     await user.click(screen.getByRole('button', { name: /disparar llamada/i }));
 
     const modal = within(screen.getByRole('dialog'));
     expect(modal.getByText(/TEST · Marcela Bravo/)).toBeTruthy();
-    expect(modal.getByText('***0141')).toBeTruthy();
+    expect(modal.getByText(/\+56900100141/)).toBeTruthy();
     expect(modal.getByText('orden_compra')).toBeTruthy();
     // Aparece dos veces: como la OC del curso y como el valor de `orden_compra`.
     expect(modal.getAllByText('TEST-9600')).toHaveLength(2);
     expect(modal.getByText(/Simulacion/)).toBeTruthy();
-    // Nunca se muestra el numero completo.
-    expect(modal.queryByText('+56900100141')).toBeNull();
+    // El numero se muestra COMPLETO a proposito: es el ultimo momento para que el operador se
+    // de cuenta de que se equivoco de numero. Y se marca si esta autorizado o no.
+    expect(modal.getByText('AUTORIZADO')).toBeTruthy();
   });
 });
 
@@ -141,7 +147,7 @@ describe('Disparador — el boton se deshabilita con la razon visible', () => {
       screen.getByLabelText(/curso/i),
       `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
     );
-    await user.selectOptions(screen.getByLabelText(/numero/i), '+56900100141');
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '+56900100141');
   };
 
   it('kill switch activo', async () => {
@@ -183,7 +189,7 @@ describe('Disparador — el boton se deshabilita con la razon visible', () => {
     expect(screen.getByText(/Cuota diaria agotada: 5\/5/)).toBeTruthy();
   });
 
-  it('allowlist vacia: no hay ningun numero para elegir', () => {
+  it('allowlist vacia: no hay ningun numero autorizado', () => {
     render(
       <Disparador
         health={{ ...HEALTH_OK, allowlist: [] }}
@@ -197,8 +203,6 @@ describe('Disparador — el boton se deshabilita con la razon visible', () => {
       true,
     );
     expect(screen.getByText(/ALLOWLIST_NUMBERS esta vacia/)).toBeTruthy();
-    // El desplegable solo tiene el placeholder: nunca hay input libre de telefono.
-    expect(within(screen.getByLabelText(/numero/i)).getAllByRole('option')).toHaveLength(1);
   });
 
   it('fuera de la ventana horaria', () => {
@@ -236,5 +240,132 @@ describe('Disparador — el boton se deshabilita con la razon visible', () => {
     // placeholder + solo el CRITICO
     expect(opciones).toHaveLength(2);
     expect(opciones.map((o) => o.textContent).join(' ')).not.toContain('TEST-9104');
+  });
+});
+
+describe('Disparador — numero: desplegable, del Semaforo, o escrito a mano', () => {
+  it('ofrece los autorizados, el del Semaforo y la opcion de escribir a mano', () => {
+    render(<Disparador health={HEALTH_OK} cursos={[CURSO_CRITICO]} onDisparado={() => {}} />);
+    const opciones = within(screen.getByLabelText(/numero a llamar/i)).getAllByRole('option');
+    const textos = opciones.map((o) => o.textContent ?? '');
+
+    expect(textos.some((t) => t.includes('+56900100141') && t.includes('autorizado'))).toBe(true);
+    expect(textos.some((t) => /escribir otro numero a mano/i.test(t))).toBe(true);
+  });
+
+  it('ofrece el numero del Semaforo marcado como NO autorizado cuando no esta en la allowlist', async () => {
+    const cursoConTelefonoAjeno = {
+      ...CURSO_CRITICO,
+      telefono: { ...CURSO_CRITICO.telefono, enAllowlist: false, valor: '+56900000002' },
+    };
+    const user = userEvent.setup();
+    render(
+      <Disparador health={HEALTH_OK} cursos={[cursoConTelefonoAjeno]} onDisparado={() => {}} />,
+    );
+    // La opcion es del curso SELECCIONADO: hay que elegirlo primero.
+    await user.selectOptions(
+      screen.getByLabelText(/curso/i),
+      `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
+    );
+    const textos = within(screen.getByLabelText(/numero a llamar/i))
+      .getAllByRole('option')
+      .map((o) => o.textContent ?? '');
+    expect(textos.some((t) => t.includes('+56900000002') && /NO autorizado/.test(t))).toBe(true);
+  });
+
+  it('escribir a mano precarga el numero del Semaforo para poder corregirlo', async () => {
+    const user = userEvent.setup();
+    render(<Disparador health={HEALTH_OK} cursos={[CURSO_CRITICO]} onDisparado={() => {}} />);
+    await user.selectOptions(
+      screen.getByLabelText(/curso/i),
+      `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
+    );
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '__manual__');
+
+    const input = screen.getByLabelText(/numero \(a mano\)/i) as HTMLInputElement;
+    expect(input.value).toBe('+56900100141');
+  });
+
+  it('un numero escrito a mano FUERA de la allowlist bloquea el boton y no dispara', async () => {
+    const fetchSpy = spyFetch();
+    const user = userEvent.setup();
+    render(<Disparador health={HEALTH_OK} cursos={[CURSO_CRITICO]} onDisparado={() => {}} />);
+    await user.selectOptions(
+      screen.getByLabelText(/curso/i),
+      `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
+    );
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '__manual__');
+
+    const input = screen.getByLabelText(/numero \(a mano\)/i);
+    await user.clear(input);
+    await user.type(input, '+56987654321');
+
+    expect(screen.getByText(/no esta en ALLOWLIST_NUMBERS/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /disparar llamada/i })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    // Y lo mas importante: no salio ningun POST.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('un numero con formato invalido bloquea el boton con esa razon', async () => {
+    const user = userEvent.setup();
+    render(<Disparador health={HEALTH_OK} cursos={[CURSO_CRITICO]} onDisparado={() => {}} />);
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '__manual__');
+    const input = screen.getByLabelText(/numero \(a mano\)/i);
+    await user.clear(input);
+    await user.type(input, '12345');
+
+    expect(screen.getByText(/no tiene formato de telefono valido/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /disparar llamada/i })).toHaveProperty(
+      'disabled',
+      true,
+    );
+  });
+
+  it('un numero autorizado escrito a mano (con espacios) si habilita el disparo', async () => {
+    const user = userEvent.setup();
+    render(<Disparador health={HEALTH_OK} cursos={[CURSO_CRITICO]} onDisparado={() => {}} />);
+    await user.selectOptions(
+      screen.getByLabelText(/curso/i),
+      `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
+    );
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '__manual__');
+
+    const input = screen.getByLabelText(/numero \(a mano\)/i);
+    await user.clear(input);
+    await user.type(input, '+569 0010 0141');
+
+    // La normalizacion saca los espacios y el numero calza con la allowlist.
+    expect(screen.getByRole('button', { name: /disparar llamada/i })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(screen.getByText('AUTORIZADO')).toBeTruthy();
+  });
+
+  it('el modal avisa en rojo si el numero no esta autorizado', async () => {
+    const user = userEvent.setup();
+    const cursoConTelefonoAjeno = {
+      ...CURSO_CRITICO,
+      telefono: { ...CURSO_CRITICO.telefono, enAllowlist: false, valor: '+56900000002' },
+    };
+    render(
+      <Disparador health={HEALTH_OK} cursos={[cursoConTelefonoAjeno]} onDisparado={() => {}} />,
+    );
+    await user.selectOptions(
+      screen.getByLabelText(/curso/i),
+      `${CURSO_CRITICO.clientId}#${CURSO_CRITICO.orderNumber}`,
+    );
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '+56900000002');
+
+    // El boton sigue bloqueado, asi que el modal no se puede abrir por esa via: la advertencia
+    // se ve directo en el panel.
+    expect(screen.getByText(/no esta en ALLOWLIST_NUMBERS/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /disparar llamada/i })).toHaveProperty(
+      'disabled',
+      true,
+    );
   });
 });

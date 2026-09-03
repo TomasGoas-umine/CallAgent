@@ -110,8 +110,12 @@ npm run web:dev              # micrositio en :5173 (en otra terminal)
   `dispatchFollowup`, que revalida todo por su cuenta.
 - `web/` — micrositio React + Vite, paquete independiente (su propio `package.json` y
   `node_modules`, no importa nada de `../src`). Ver `web/README.md` antes de tocarlo: hay
-  decisiones deliberadas ahi (sin router, assets relativos, sin polling, telefono siempre
-  enmascarado, cero input libre de telefono, modal de confirmacion obligatorio).
+  decisiones deliberadas ahi (sin router, assets relativos, sin polling, telefonos de terceros
+  enmascarados en el tablero, modal de confirmacion obligatorio).
+- **El disparador si permite escribir el telefono a mano** (desplegable de autorizados + el del
+  curso + input manual). Eso NO debilita nada: el guardrail de allowlist vive en el backend
+  (`services/guardrails.ts`), asi que un numero fuera de `ALLOWLIST_NUMBERS` responde 403 igual.
+  Lo que hace el front es avisar el motivo antes. **No muevas el chequeo de allowlist al front.**
 
 **La cuota diaria es persistente** (`QuotaRepository`, `QUOTA#<fecha> COUNTER` con `ADD`
 condicional atomico) y la consume el dispatcher justo despues de la escritura condicional

@@ -4,15 +4,37 @@ import { ConfirmModal } from './ConfirmModal';
 import { NivelBadge } from './Badge';
 import type { CursoTablero, DisparoResponse, Health } from '../types';
 
+/** Valor centinela del desplegable que habilita el input manual. */
+const MANUAL = '__manual__';
+
+/**
+ * Normaliza lo que el operador escribe a mano: saca espacios, guiones y parentesis.
+ * NO inventa prefijo pais: si el numero no calza con lo que hay en la allowlist, tiene que
+ * fallar de forma visible, no "arreglarse" solo.
+ */
+export function normalizarTelefono(raw: string): string {
+  return raw.replace(/[\s()-]/g, '');
+}
+
+/** Formato E.164 laxo: `+` y entre 8 y 15 digitos. */
+export function formatoValido(numero: string): boolean {
+  return /^\+\d{8,15}$/.test(numero);
+}
+
 /**
  * Razones por las que el boton de disparo queda deshabilitado. Se calculan aca SOLO para poder
- * mostrarle al operador el motivo antes de que apriete; el backend las vuelve a evaluar (y es
- * el que manda: 403 / 429 / 503). Nunca se llama sin pasar por POST /api/calls.
+ * mostrarle al operador el motivo antes de que apriete; el backend las vuelve a evaluar y es el
+ * que manda (403 / 429 / 503). Nunca se llama sin pasar por POST /api/calls.
+ *
+ * Importante: el input manual de telefono NO debilita nada. El guardrail de allowlist vive en
+ * el backend (`services/guardrails.ts`), asi que un numero escrito a mano que no este en
+ * ALLOWLIST_NUMBERS termina en 403 igual. Lo que se hace aca es avisarlo antes.
  */
 function razonesDeBloqueo(
   health: Health | null,
   curso: CursoTablero | null,
   numero: string,
+  escrituraManual: boolean,
 ): string[] {
   const razones: string[] = [];
   if (!health) {
@@ -31,9 +53,16 @@ function razonesDeBloqueo(
     razones.push('ALLOWLIST_NUMBERS esta vacia: no hay ningun numero autorizado para llamar.');
   }
   if (!numero) {
-    razones.push('Elige un numero de la allowlist.');
+    razones.push(escrituraManual ? 'Escribe el numero a llamar.' : 'Elige un numero.');
+  } else if (!formatoValido(numero)) {
+    razones.push(
+      `"${numero}" no tiene formato de telefono valido (se espera + y de 8 a 15 digitos, ej. +56912345678).`,
+    );
   } else if (!health.allowlist.some((a) => a.value === numero)) {
-    razones.push('El numero elegido no esta en la allowlist.');
+    razones.push(
+      `${numero} no esta en ALLOWLIST_NUMBERS: solo se puede llamar a los numeros autorizados ` +
+        `(${health.allowlist.map((a) => a.value).join(', ')}).`,
+    );
   }
   if (!curso) {
     razones.push('Elige un curso del tablero.');
@@ -59,7 +88,8 @@ export function Disparador({
   onDisparado: () => void;
 }) {
   const [cursoKey, setCursoKey] = useState('');
-  const [numero, setNumero] = useState('');
+  const [seleccion, setSeleccion] = useState('');
+  const [numeroManual, setNumeroManual] = useState('');
   const [operador, setOperador] = useState('');
   const [modalAbierto, setModalAbierto] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -81,10 +111,26 @@ export function Disparador({
     () => candidatos.find((c) => `${c.clientId}#${c.orderNumber}` === cursoKey) ?? null,
     [candidatos, cursoKey],
   );
-  const entradaAllowlist = health?.allowlist.find((a) => a.value === numero) ?? null;
 
-  const razones = razonesDeBloqueo(health, curso, numero);
+  const escrituraManual = seleccion === MANUAL;
+  const numero = escrituraManual ? normalizarTelefono(numeroManual) : seleccion;
+
+  const razones = razonesDeBloqueo(health, curso, numero, escrituraManual);
   const bloqueado = razones.length > 0;
+  const enAllowlist = Boolean(health?.allowlist.some((a) => a.value === numero));
+
+  /**
+   * El precargado del numero del curso pasa UNA sola vez, al momento de elegir "escribir a
+   * mano". No puede vivir en un efecto que reaccione a "el campo esta vacio": ahi el campo se
+   * vuelve a llenar solo en cuanto el operador lo borra, y termina escribiendo sobre el numero
+   * viejo en vez de reemplazarlo.
+   */
+  function cambiarSeleccion(valor: string) {
+    setSeleccion(valor);
+    if (valor === MANUAL && !numeroManual) {
+      setNumeroManual(curso?.telefono.valor ?? '');
+    }
+  }
 
   function abrirConfirmacion() {
     setResultado(null);
@@ -147,16 +193,39 @@ export function Disparador({
         </label>
 
         <label className="uv-field">
-          <span className="uv-field__label">Numero (allowlist)</span>
-          <select className="uv-select" value={numero} onChange={(e) => setNumero(e.target.value)}>
+          <span className="uv-field__label">Numero a llamar</span>
+          <select
+            className="uv-select"
+            value={seleccion}
+            onChange={(e) => cambiarSeleccion(e.target.value)}
+          >
             <option value="">— elegir numero —</option>
             {(health?.allowlist ?? []).map((a) => (
               <option key={a.value} value={a.value}>
-                {a.masked}
+                {a.value} · autorizado
               </option>
             ))}
+            {curso?.telefono.valor && !curso.telefono.enAllowlist ? (
+              <option value={curso.telefono.valor}>
+                {curso.telefono.valor} · del Semaforo (NO autorizado)
+              </option>
+            ) : null}
+            <option value={MANUAL}>Escribir otro numero a mano…</option>
           </select>
         </label>
+
+        {escrituraManual ? (
+          <label className="uv-field">
+            <span className="uv-field__label">Numero (a mano)</span>
+            <input
+              className="uv-select"
+              type="tel"
+              value={numeroManual}
+              placeholder="+56912345678"
+              onChange={(e) => setNumeroManual(e.target.value)}
+            />
+          </label>
+        ) : null}
 
         <label className="uv-field">
           <span className="uv-field__label">Quien dispara (opcional)</span>
@@ -179,8 +248,27 @@ export function Disparador({
       </div>
 
       <p className="uv-note" style={{ marginTop: 8 }}>
-        El numero sale siempre de ALLOWLIST_NUMBERS — no hay campo de texto libre para telefonos.
+        Puedes elegir un numero autorizado, tomar el del Semaforo o escribirlo a mano. Cualquiera
+        que sea, solo se marca si esta en <code>ALLOWLIST_NUMBERS</code> — el guardrail vive en el
+        backend, asi que escribirlo a mano no lo saltea.
+        {health?.allowlist.length ? (
+          <>
+            {' '}
+            Autorizados hoy: <strong>{health.allowlist.map((a) => a.value).join(', ')}</strong>.
+          </>
+        ) : null}
       </p>
+
+      {numero && formatoValido(numero) ? (
+        <p className="uv-note">
+          Numero elegido: <span className="uv-mono">{numero}</span>{' '}
+          {enAllowlist ? (
+            <span className="uv-badge uv-badge--normal">AUTORIZADO</span>
+          ) : (
+            <span className="uv-badge uv-badge--critico">NO AUTORIZADO</span>
+          )}
+        </p>
+      ) : null}
 
       {bloqueado ? (
         <div className="uv-blocked">
@@ -238,10 +326,11 @@ export function Disparador({
         </div>
       ) : null}
 
-      {modalAbierto && curso && entradaAllowlist ? (
+      {modalAbierto && curso && numero ? (
         <ConfirmModal
           curso={curso}
-          numero={entradaAllowlist}
+          numero={numero}
+          numeroAutorizado={enAllowlist}
           mockProviders={health?.mockProviders ?? false}
           enviando={enviando}
           onConfirmar={confirmar}

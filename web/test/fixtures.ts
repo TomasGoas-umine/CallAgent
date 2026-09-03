@@ -38,6 +38,7 @@ export const CURSO_CRITICO: CursoTablero = {
     enAllowlist: true,
     doNotCall: false,
     ultimoContactoAt: null,
+    valor: '+56900100141',
   },
   llamable: true,
   variablesAgente: {
@@ -60,7 +61,12 @@ export const CURSO_NORMAL: CursoTablero = {
   pctConexion: 25,
   conectados: 5,
   diasRestantes: 24,
-  telefono: { ...CURSO_CRITICO.telefono, masked: '***0016', enAllowlist: false },
+  telefono: {
+    ...CURSO_CRITICO.telefono,
+    masked: '***0016',
+    enAllowlist: false,
+    valor: '+56900000016',
+  },
   llamable: false,
 };
 

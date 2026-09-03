@@ -44,6 +44,11 @@ export interface CursoTablero {
     enAllowlist: boolean;
     doNotCall: boolean;
     ultimoContactoAt: string | null;
+    /**
+     * Numero completo del curso, para poder ofrecerlo como opcion en el disparador. Solo viene
+     * en modo fixture (ahi es dato sintetico); con un Semaforo real llega `null` a proposito.
+     */
+    valor: string | null;
   };
   llamable: boolean;
   variablesAgente: Record<string, string>;

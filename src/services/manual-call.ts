@@ -59,7 +59,10 @@ export type ManualCallStatus =
 export interface ManualCallInput {
   clientId: string;
   orderNumber: string;
-  /** Debe venir de la allowlist (el micrositio la ofrece como desplegable, nunca input libre). */
+  /**
+   * Debe estar en ALLOWLIST_NUMBERS. El micrositio lo ofrece como desplegable y tambien deja
+   * escribirlo a mano, pero eso es solo comodidad: quien decide es `runGuardrails` mas abajo.
+   */
   phone: string;
   /** Obligatoria. La aporta quien dispara; dos llamadas con la misma key originan UNA sola. */
   idempotencyKey: string;

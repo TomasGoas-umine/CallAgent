@@ -49,12 +49,23 @@ npm test           # vitest (jsdom)
 - **Sin polling.** Los datos se cargan al montar y despues solo cuando el operador aprieta
   Refrescar (o despues de un disparo). Es deliberado: el plan es Starter y el sistema no debe
   hacer nada por su cuenta.
-- **El telefono nunca se muestra completo en el tablero.** La API devuelve solo `***1234`. El
-  numero completo entra solo por el desplegable de la allowlist (que viene de `/api/health`), y
-  ahi tambien se muestra enmascarado.
-- **Nunca hay input libre de telefono.** El desplegable se puebla **solo** con
-  `ALLOWLIST_NUMBERS`. Si la allowlist esta vacia, el boton queda deshabilitado con esa razon
-  visible.
+- **En el tablero los telefonos de terceros van enmascarados** (`***1234`). Los numeros
+  AUTORIZADOS (los de `ALLOWLIST_NUMBERS`, que son del propio operador) si se muestran
+  completos en el disparador y en el modal: el operador necesita ver a cual esta llamando, y el
+  modal es el ultimo momento para darse cuenta de que se equivoco de numero.
+- **El numero se puede escribir a mano.** El desplegable ofrece los autorizados, el del curso
+  (marcado "NO autorizado" si no esta en la allowlist) y la opcion de escribirlo a mano —
+  precargada con el del curso, porque el caso normal es tener que corregirlo (el telefono real
+  no existe en la cadena de datos del Semaforo, ver UV-024).
+
+  Esto **no** debilita la proteccion: el guardrail de allowlist vive en el backend, asi que
+  cualquier numero fuera de `ALLOWLIST_NUMBERS` responde 403 sin llamar a nadie. El front solo
+  adelanta el motivo y mantiene el boton bloqueado. **Nunca muevas el chequeo de allowlist al
+  front, ni lo uses como si fuera la unica barrera.**
+
+- **El precargado del numero pasa una sola vez**, al elegir "escribir a mano". No puede vivir en
+  un efecto que reaccione a "el campo esta vacio": ahi se vuelve a llenar solo en cuanto el
+  operador borra, y termina escribiendo sobre el numero viejo (bug real, ya corregido).
 - **El modal de confirmacion es obligatorio.** El boton "Disparar llamada…" solo abre el modal;
   el `POST /api/calls` sale unicamente del boton del modal (hay un test que lo verifica).
 - **La idempotency key se genera al abrir el modal**, no al confirmar: si el operador hace doble
@@ -66,6 +77,6 @@ npm test           # vitest (jsdom)
 ## Razones de bloqueo del boton
 
 `razonesDeBloqueo()` en `src/components/Disparador.tsx` calcula y muestra el motivo (kill switch,
-cuota agotada, allowlist vacia, numero fuera de allowlist, curso no CRITICO, fuera de ventana
-horaria). Es **solo UX**: el backend vuelve a evaluar todo y es el que manda (403 / 429 / 503).
-Nunca se origina una llamada sin pasar por `POST /api/calls`.
+cuota agotada, allowlist vacia, formato de telefono invalido, numero fuera de allowlist, curso no
+CRITICO, fuera de ventana horaria). Es **solo UX**: el backend vuelve a evaluar todo y es el que
+manda (403 / 429 / 503). Nunca se origina una llamada sin pasar por `POST /api/calls`.

@@ -195,21 +195,41 @@ describe('GET /api/tablero', () => {
     });
     expect(demo.contacto.nombre).toBeTruthy();
     expect(demo.contacto.cargo).toBeTruthy();
-    expect(demo.telefono).toMatchObject({ masked: '***0141', enAllowlist: true });
+    // `masked` es lo que el TABLERO muestra; `valor` existe para que el disparador pueda
+    // ofrecer el numero del curso como opcion y el operador pueda corregirlo a mano.
+    expect(demo.telefono).toMatchObject({
+      masked: '***0141',
+      enAllowlist: true,
+      valor: DEMO_PHONE,
+    });
     expect(demo.variablesAgente).toMatchObject({
       orden_compra: DEMO_ORDER_NUMBER,
       motivo: 'riesgo_conexion_critico',
     });
-
-    // Ningun telefono completo puede salir por esta ruta.
-    expect(response.body).not.toContain(DEMO_PHONE);
-    expect(response.body).not.toContain('+56900000013');
 
     // Estan los tres niveles y las cuatro semanas de curso.
     const niveles = new Set(body.cursos.map((c: { nivel: string }) => c.nivel));
     expect(niveles).toEqual(new Set(['CRITICO', 'ALERTA', 'NORMAL']));
     const semanas = new Set(body.cursos.map((c: { semana: number }) => c.semana));
     expect(semanas).toEqual(new Set([1, 2, 3, 4]));
+    await app.close();
+  });
+
+  it('en modo http NO expone el telefono completo: solo el enmascarado', async () => {
+    // Los telefonos del fixture son sinteticos, por eso se pueden entregar completos. Con un
+    // Semaforo real, exponer telefonos de terceros es una decision de privacidad que hay que
+    // tomar aparte (UV-024 / UV-046), asi que el campo llega en null a proposito.
+    process.env.TABLERO_API_MODE = 'http';
+    const { app } = await buildTestApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/tablero' })).json();
+
+    const demo = body.cursos.find(
+      (c: { orderNumber: string }) => c.orderNumber === DEMO_ORDER_NUMBER,
+    );
+    expect(demo.telefono.masked).toBe('***0141');
+    expect(demo.telefono.valor).toBeNull();
+    // Y el numero completo no aparece en ninguna parte de la respuesta.
+    expect(JSON.stringify(body)).not.toContain(DEMO_PHONE);
     await app.close();
   });
 
