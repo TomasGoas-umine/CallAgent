@@ -24,6 +24,7 @@
     "local:server": "tsx --env-file=.env src/local/server.ts",
     "local:demo": "tsx --env-file=.env scripts/local-demo.ts",
     "fixture:generate": "tsx scripts/generate-fixture.ts",
+    "providers:check": "tsx --env-file=.env scripts/providers-check.ts",
     "web:install": "npm --prefix web install",
     "web:dev": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",

@@ -131,9 +131,13 @@ no minutos (ver UV-044).
    mano, pero **su disparador no se habilita**. Ver `docs/architecture/DECISIONS.md` ADR-010.
    `infra/` todavia declara una `events.Rule` de cron: hay que deshabilitarla antes de
    desplegar (UV-042).
-1. **Nunca llames de verdad a Twilio/ElevenLabs.** `MOCK_PROVIDERS=true` es el default en
-   local y en tests. Si se activa `MOCK_PROVIDERS=false`, `elevenlabs-client.factory.ts` exige
-   ademas `ALLOWLIST_NUMBERS` no vacia — nunca se activa el cliente real por omision.
+1. **Las llamadas reales se activan a mano, nunca por omision.** `MOCK_PROVIDERS=true` es el
+   default. Con `MOCK_PROVIDERS=false` la factory exige `ALLOWLIST_NUMBERS`,
+   `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_AGENT_PHONE_NUMBER_ID` y
+   `ELEVENLABS_WEBHOOK_SECRET`, y falla nombrando lo que falte antes de tocar la red.
+   **Los tests NUNCA llaman de verdad**: usan `MockElevenLabsClient` o interceptan `fetch`
+   (ver `test/unit/elevenlabs-real-client.spec.ts`). Antes del primer disparo real corre
+   `npm run providers:check`, que valida todo con puros GET. Ver README, "Llamadas reales".
 2. **No dupliques la logica de urgencia/promocion de estado.** Vive en
    `urgency-classifier.ts` + `order-status-promoter.ts` — nada mas debe reimplementarla.
 3. **`.env.example` solo lleva nombres de variables**, nunca valores reales. Revisa `git diff`

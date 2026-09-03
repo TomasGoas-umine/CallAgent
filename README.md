@@ -71,6 +71,91 @@ Codigos de `POST /api/calls`:
 | 503    | `KILL_SWITCH=true`                                                                     |
 | 502    | El proveedor rechazo la originacion                                                    |
 
+## Llamadas reales (salir del modo simulacion)
+
+Por defecto `MOCK_PROVIDERS=true`: el disparador simula y no se gasta un minuto. Para llamar de
+verdad hacen falta cuatro cosas, y conviene hacerlas en este orden.
+
+### 1. Una cuenta de ElevenLabs con un agente y un numero importado
+
+En el panel de ElevenLabs:
+
+- **Un agente** (Agents Platform -> Agents). Su `agent_id` va en `ELEVENLABS_AGENT_ID`.
+- **Un numero de Twilio importado** (Agents Platform -> Phone Numbers -> _Import from Twilio_).
+  Ahi ElevenLabs te pide el **Account SID** y el **Auth Token** de Twilio, y guarda el numero
+  del lado suyo. El `phone_number_id` que queda va en `ELEVENLABS_AGENT_PHONE_NUMBER_ID`.
+  Asigna ese numero al agente.
+- **Una API key** (Settings -> API Keys) con acceso a Agents Platform. Va en
+  `ELEVENLABS_API_KEY`.
+
+Importante: **la llamada la origina ElevenLabs, no este backend.** Nosotros solo hacemos
+`POST /v1/convai/twilio/outbound-call` (integracion nativa, ADR-003). Por eso las credenciales
+de Twilio que importan son las que le diste a ElevenLabs; las de nuestro `.env` solo se usan
+para validar la firma del webhook de status de Twilio, que es opcional.
+
+### 2. Una URL publica para el webhook post-call
+
+Sin esto **la llamada ocurre pero el resultado nunca vuelve**: el FOLLOWUP se queda en `DIALING`
+para siempre, sin transcripcion ni clasificacion. El server corre en localhost, asi que hace
+falta un tunel:
+
+```bash
+# opcion A: cloudflared (gratis, sin cuenta)
+cloudflared tunnel --url http://localhost:3000
+# opcion B: ngrok
+ngrok http 3000
+```
+
+Copia la URL `https://...` que te devuelve a `PUBLIC_BASE_URL` en el `.env`, y registrala en
+ElevenLabs (Settings -> Webhooks, post-call):
+
+```
+https://<tu-tunel>/webhooks/elevenlabs/post-call
+```
+
+ElevenLabs te muestra **una sola vez** el secreto de firma al crear el webhook: ese valor va en
+`ELEVENLABS_WEBHOOK_SECRET`. El backend rechaza con 401 cualquier webhook cuya firma HMAC no
+cuadre, asi que si el secreto esta mal no vas a ver el resultado de la llamada.
+
+### 3. Validar TODO antes de gastar un minuto
+
+```bash
+npm run providers:check
+```
+
+Hace solo lecturas (`GET`), no llama a nadie. Verifica la API key, lista tus agentes y numeros
+importados, confirma que los IDs del `.env` existen de verdad, chequea las credenciales de
+Twilio y avisa de configuraciones riesgosas (ventana horaria 24h, cuenta Twilio en Trial, etc.).
+Resolve todos los `FALTA` antes de seguir.
+
+### 4. Activar
+
+```bash
+# en .env
+MOCK_PROVIDERS=false
+```
+
+Reinicia `npm run local:server`. El banner del micrositio pasa a **rojo** avisando que las
+llamadas son reales, y el boton del modal dice "Llamar de verdad".
+
+**La primera llamada, a tu propio numero.** Los guardrails siguen todos activos: solo se puede
+marcar a `ALLOWLIST_NUMBERS`, con `DAILY_QUOTA` llamadas por dia, dentro de la ventana horaria,
+y `KILL_SWITCH=true` corta todo al instante.
+
+### Cosas que muerden
+
+- **Cuenta Twilio en Trial**: solo llama a numeros _verificados_ en Twilio (Console -> Phone
+  Numbers -> Verified Caller IDs). `providers:check` te avisa si detecta Trial.
+- **Regulacion chilena (UV-027)**: Twilio exige numeros `+56 600` / `+56 809` con KYC local para
+  comunicaciones automatizadas. Es un bloqueante externo, no tecnico — para probar contra tu
+  propio numero normalmente no aparece, pero si antes de llamarle a un cliente.
+- **Ventana horaria**: si tu `.env` local la tiene en `00:00-23:59` (comodo para probar),
+  volvela a `09:00-19:00` antes de llamar a alguien que no seas vos.
+- **`CALL_RECORDING_ENABLED`**: default `false` (UV-026, decision de negocio abierta). Se manda
+  explicito en cada request, no se hereda de la config del agente.
+- **`DRY_RUN`** solo afecta al evaluador en lote, **no** al disparador manual: no te protege de
+  una llamada real disparada desde el micrositio. El que te protege es `MOCK_PROVIDERS`.
+
 ## Calidad
 
 ```bash

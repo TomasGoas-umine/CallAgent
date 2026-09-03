@@ -16,6 +16,12 @@ export interface StartOutboundCallParams {
   agentPhoneNumberId: string;
   toNumber: string;
   dynamicVariables: Record<string, string>;
+  /**
+   * Grabacion de la llamada. Decision de negocio ABIERTA (UV-026, ADR-006): el piloto asume
+   * `false`. Se manda SIEMPRE explicito en la request en vez de dejar que el agente decida por
+   * su configuracion, para que la decision quede en el codigo y no en un panel.
+   */
+  callRecordingEnabled?: boolean;
 }
 
 export interface StartOutboundCallResult {
@@ -29,10 +35,30 @@ export interface ElevenLabsClient {
   startOutboundCall(params: StartOutboundCallParams): Promise<StartOutboundCallResult>;
 }
 
-const ELEVENLABS_OUTBOUND_CALL_URL = 'https://api.elevenlabs.io/v1/convai/twilio/outbound-call';
+export const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1/convai';
+const OUTBOUND_CALL_PATH = '/twilio/outbound-call';
+
+/** La API responde rapido (solo encola la llamada). Sin timeout, un cuelgue bloquea el dispatch. */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * Forma de la respuesta de POST /v1/convai/twilio/outbound-call.
+ * OJO con `callSid`: la API lo devuelve en camelCase (no snake_case como el resto).
+ */
+interface OutboundCallResponseBody {
+  success?: boolean;
+  message?: string;
+  conversation_id?: string;
+  callSid?: string;
+  call_sid?: string;
+  detail?: unknown;
+}
 
 export class RealElevenLabsClient implements ElevenLabsClient {
-  constructor(private readonly apiKey: string) {
+  constructor(
+    private readonly apiKey: string,
+    private readonly baseUrl: string = ELEVENLABS_API_BASE,
+  ) {
     if (!apiKey) {
       throw new Error(
         'RealElevenLabsClient requiere ELEVENLABS_API_KEY — no lo uses sin MOCK_PROVIDERS=false + credencial real.',
@@ -41,40 +67,89 @@ export class RealElevenLabsClient implements ElevenLabsClient {
   }
 
   async startOutboundCall(params: StartOutboundCallParams): Promise<StartOutboundCallResult> {
-    const response = await fetch(ELEVENLABS_OUTBOUND_CALL_URL, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': this.apiKey,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        agent_id: params.agentId,
-        agent_phone_number_id: params.agentPhoneNumberId,
-        to_number: params.toNumber,
-        conversation_initiation_client_data: {
-          dynamic_variables: params.dynamicVariables,
-        },
-      }),
+    // Se loguea ANTES de llamar: si el proceso muere en el medio, queda rastro de que se
+    // intento gastar un minuto real. El telefono lo enmascara el logger.
+    logger.info('elevenlabs_outbound_call_attempt', {
+      agentId: params.agentId,
+      toNumber: params.toNumber,
+      callRecordingEnabled: params.callRecordingEnabled ?? false,
     });
 
-    const body = (await response.json().catch(() => ({}))) as {
-      conversation_id?: string;
-      callSid?: string;
-      call_sid?: string;
-      message?: string;
-    };
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${OUTBOUND_CALL_PATH}`, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': this.apiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          agent_id: params.agentId,
+          agent_phone_number_id: params.agentPhoneNumberId,
+          to_number: params.toNumber,
+          conversation_initiation_client_data: {
+            dynamic_variables: params.dynamicVariables,
+          },
+          call_recording_enabled: params.callRecordingEnabled ?? false,
+        }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (err) {
+      // Timeout o fallo de red. NO se sabe si la llamada se origino o no: se reporta como
+      // fallo (el dispatcher va a reintentar segun MAX_ATTEMPTS) y queda el log de arriba.
+      const error = err instanceof Error ? err.message : String(err);
+      logger.error('elevenlabs_outbound_call_network_error', { error });
+      return { success: false, error: `red/timeout: ${error}` };
+    }
+
+    const raw = await response.text();
+    let body: OutboundCallResponseBody = {};
+    try {
+      body = raw ? (JSON.parse(raw) as OutboundCallResponseBody) : {};
+    } catch {
+      // Respuesta no-JSON (ej. un HTML de error de gateway): se preserva un extracto.
+      body = { message: raw.slice(0, 200) };
+    }
 
     if (!response.ok) {
-      logger.error('elevenlabs_outbound_call_failed', { status: response.status });
-      return { success: false, error: body.message ?? `HTTP ${response.status}` };
+      logger.error('elevenlabs_outbound_call_failed', {
+        status: response.status,
+        message: body.message ?? body.detail,
+      });
+      return {
+        success: false,
+        error: `HTTP ${response.status}: ${describeError(body)}`,
+      };
+    }
+
+    // 200 con `success: false` es un caso real (ej. el numero no es valido para el proveedor).
+    // Sin este chequeo el followup quedaria en DIALING esperando un webhook que no va a llegar.
+    if (body.success === false) {
+      logger.error('elevenlabs_outbound_call_rejected', { message: body.message });
+      return { success: false, error: `proveedor rechazo la llamada: ${describeError(body)}` };
+    }
+
+    const conversationId = body.conversation_id;
+    if (!conversationId) {
+      // Sin conversation_id no se puede correlacionar el webhook post-call con el FOLLOWUP:
+      // la llamada podria estar en curso y su resultado se perderia. Se trata como fallo
+      // ruidoso en vez de dejar el followup colgado en silencio.
+      logger.error('elevenlabs_outbound_call_sin_conversation_id', { status: response.status });
+      return { success: false, error: 'la respuesta no trajo conversation_id' };
     }
 
     return {
       success: true,
-      conversationId: body.conversation_id,
+      conversationId,
       callSid: body.callSid ?? body.call_sid,
     };
   }
+}
+
+function describeError(body: OutboundCallResponseBody): string {
+  if (body.message) return body.message;
+  if (body.detail !== undefined) return JSON.stringify(body.detail).slice(0, 200);
+  return 'sin detalle';
 }
 
 export type MockOutboundCallScenario = 'success' | 'no_answer' | 'busy' | 'error';

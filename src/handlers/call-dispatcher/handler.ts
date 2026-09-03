@@ -140,6 +140,7 @@ export async function dispatchFollowup(
     agentId: env.elevenlabsAgentId,
     agentPhoneNumberId: env.elevenlabsAgentPhoneNumberId,
     toNumber: followup.destinatarioPhone,
+    callRecordingEnabled: env.callRecordingEnabled,
     dynamicVariables: buildAgentDynamicVariables({
       clientName: followup.contexto.clientName,
       courseName: followup.contexto.courseName,

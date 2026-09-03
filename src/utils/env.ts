@@ -45,6 +45,19 @@ export const env = {
   twilioAuthToken: str('TWILIO_AUTH_TOKEN', ''),
   twilioPhoneNumber: str('TWILIO_PHONE_NUMBER', ''),
 
+  /**
+   * Grabacion de la llamada. Default `false` (ADR-006 / UV-026: el piloto asume que no se
+   * graba). Se manda explicito en cada request a ElevenLabs.
+   */
+  callRecordingEnabled: bool('CALL_RECORDING_ENABLED', false),
+  /**
+   * URL publica base por la que ElevenLabs/Twilio pueden alcanzar los webhooks de este server
+   * (ej. la de un tunel cloudflared/ngrok). Solo informativa: la usa `providers:check` para
+   * decirte que URL registrar en el panel. Vacia = el webhook post-call no va a llegar y los
+   * FOLLOWUP se quedan en DIALING.
+   */
+  publicBaseUrl: str('PUBLIC_BASE_URL', ''),
+
   killSwitch: bool('KILL_SWITCH', false),
   dryRun: bool('DRY_RUN', true),
   dailyQuota: num('DAILY_QUOTA', 5),
