@@ -10,6 +10,12 @@
  * Flujo probado: dispara el evaluador -> verifica que se creo un FOLLOWUP -> simula el
  * dispatcher -> simula un webhook de ElevenLabs valido -> verifica que el estado final
  * quedo correctamente clasificado y persistido.
+ *
+ * OJO con la cuota: este demo ejercita el flujo EN LOTE, asi que el `drain` del dispatcher
+ * despacha todos los candidatos encolados, no solo el del demo — y cada uno consume un slot de
+ * la cuota diaria persistente. Con `DAILY_QUOTA=5` una corrida la deja practicamente agotada.
+ * `resetDemoState` borra el contador del dia justamente para que el demo sea re-corrible; si
+ * necesitas cuota para probar el micrositio despues, subila en tu `.env` local.
  */
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, DeleteCommand } from '@aws-sdk/lib-dynamodb';
@@ -128,10 +134,24 @@ async function main() {
         'Reinicia `npm run local:server` con DRY_RUN=false (ver CLAUDE.md).',
     );
   }
-  const created = evalResult.created.find((c) => c.destinatarioPhone === DEMO_PHONE);
+  // Se identifica por ORDER NUMBER, no por telefono: desde que los cursos CRITICO del fixture
+  // resuelven su telefono contra ALLOWLIST_NUMBERS (ver test/fixtures/README.md), varios cursos
+  // comparten el mismo numero de prueba a proposito. Buscar por telefono hacia que el demo
+  // ejercitara un curso distinto en cada corrida (el primero de la lista con ese numero) y que
+  // `resetDemoState` limpiara el estado de un curso que no era el que se estaba probando.
+  const created = evalResult.created.find((c) => c.orderNumber === DEMO_ORDER_NUMBER);
   if (!created) {
     console.error('Evaluator result:', JSON.stringify(evalResult, null, 2));
-    throw new Error(`No se creo un FOLLOWUP para el candidato demo (${DEMO_PHONE}).`);
+    throw new Error(
+      `No se creo un FOLLOWUP para el curso demo (OC ${DEMO_ORDER_NUMBER}). ` +
+        'Si el motivo es cuota_diaria_alcanzada, el evaluador la agoto con los cursos anteriores: ' +
+        'sube DAILY_QUOTA en tu .env local o corre el demo con la base recien creada.',
+    );
+  }
+  if (created.destinatarioPhone !== DEMO_PHONE) {
+    console.log(
+      `   (el curso demo resolvio el telefono ${created.destinatarioPhone} desde ALLOWLIST_NUMBERS)`,
+    );
   }
   console.log(`   FOLLOWUP creado: ${created.followupId} (estado=${created.estado})`);
 
