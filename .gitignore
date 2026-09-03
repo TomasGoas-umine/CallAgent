@@ -10,3 +10,4 @@ npm-debug.log*
 .dynamo-local-data/
 .vitest-cache/
 .dynalite.pid
+.claude/settings.local.json
