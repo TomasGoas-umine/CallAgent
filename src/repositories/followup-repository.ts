@@ -143,6 +143,39 @@ export class FollowupRepository extends BaseRepository {
     });
   }
 
+  /**
+   * Todos los FOLLOWUP de los estados pedidos, mas recientes primero.
+   *
+   * Se implementa como una query por estado sobre GSI1 (`GSI1PK = ESTADO#<estado>`) en vez de
+   * un `scan`: la tabla no tiene un indice "todos los followups" y agregar un GSI nuevo
+   * obligaria a cambiar `infra/` (fuera de alcance). Son ~11 estados posibles, asi que el
+   * costo es acotado y conocido; para el micrositio local es de sobra.
+   */
+  async listByEstados(estados: FollowupEstado[], limit = 100): Promise<Followup[]> {
+    const perEstado = await Promise.all(
+      estados.map((estado) =>
+        this.query<FollowupItem>({
+          IndexName: 'GSI1',
+          KeyConditionExpression: 'GSI1PK = :pk',
+          ExpressionAttributeValues: { ':pk': `ESTADO#${estado}` },
+        }),
+      ),
+    );
+    return perEstado
+      .flat()
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  /** Todos los intentos de llamada de un FOLLOWUP (items `CALL#<conversation_id>`). */
+  async listCalls(followupId: string): Promise<FollowupCall[]> {
+    const items = await this.query<FollowupCallItem>({
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+      ExpressionAttributeValues: { ':pk': followupPk(followupId), ':sk': 'CALL#' },
+    });
+    return items.sort((a, b) => (a.endedAt ?? '').localeCompare(b.endedAt ?? ''));
+  }
+
   /** GSI2: followups recientes hacia el mismo destinatario (para el guardrail de cooldown). */
   async findRecentByDestinatario(destinatarioPhone: string, sinceIso: string): Promise<Followup[]> {
     return this.query<FollowupItem>({

@@ -13,6 +13,7 @@ import { dispatchFollowup } from '../handlers/call-dispatcher/handler.js';
 import { handleElevenLabsPostCall } from '../handlers/webhooks/elevenlabs-post-call/handler.js';
 import { handleTwilioStatus } from '../handlers/webhooks/twilio-status/handler.js';
 import { FollowupRepository } from '../repositories/followup-repository.js';
+import { registerApiRoutes } from './api-routes.js';
 import { sharedLocalQueue } from '../services/queue.js';
 import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
@@ -40,6 +41,9 @@ function send(reply: FastifyReply, result: ApiResponse) {
   }
   reply.type('application/json').send(result.body);
 }
+
+// --- API de operacion del micrositio (ver src/local/api-routes.ts) ---
+await app.register(registerApiRoutes);
 
 // --- candidate-evaluator (en AWS real: EventBridge cron; aca: POST manual o local:demo) ---
 app.post('/internal/evaluator', async (_request, reply) => {
@@ -100,6 +104,7 @@ app.get('/internal/queue/size', async (_request, reply) => {
   reply.code(200).send({ size: sharedLocalQueue.size() });
 });
 
+/** Health minimo historico (lo usa scripts/local-demo.ts). El completo es GET /api/health. */
 app.get('/health', async (_request, reply) => {
   reply.code(200).send({ status: 'ok', mockProviders: env.mockProviders, dryRun: env.dryRun });
 });

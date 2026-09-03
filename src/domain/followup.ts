@@ -72,3 +72,18 @@ export interface FollowupCall {
   /** Resultado ya clasificado por `call-outcome-classifier` (taxonomia unica). */
   outcome?: string;
 }
+
+/** Todos los estados posibles — usado para listar followups sin depender de un `scan`. */
+export const ALL_FOLLOWUP_ESTADOS: FollowupEstado[] = [
+  'READY',
+  'DIALING',
+  'ERROR',
+  'AGOTADO',
+  'RESUELTO',
+  'FOLLOW_UP',
+  'CERRADO',
+  'ESCALADO',
+  'RESUELTO_SIN_LLAMADA',
+  'DIFERIDO',
+  'BLOQUEADO',
+];
