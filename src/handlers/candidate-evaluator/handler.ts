@@ -147,6 +147,7 @@ export async function runCandidateEvaluator(deps: EvaluatorDeps = {}): Promise<E
       idempotencyKey,
       createdAt: now,
       updatedAt: now,
+      origen: 'automatico',
       contexto: {
         clientId: group.clientId,
         clientName: candidateRecord.client_name,

@@ -75,6 +75,11 @@ export async function handleElevenLabsPostCall(
     dataCollection: classification.dataCollection,
     evaluation: payload.data.analysis?.evaluation_criteria_results ?? {},
     transcriptS3Key: null,
+    // Se persiste para que el operador pueda leerla en el micrositio. Nunca se loguea:
+    // logger.ts omite `transcript`/`transcript_summary` a proposito.
+    transcript: payload.data.transcript ?? [],
+    transcriptSummary: payload.data.analysis?.transcript_summary ?? null,
+    outcome: classification.outcome,
   });
 
   if (recordResult === 'already_exists') {

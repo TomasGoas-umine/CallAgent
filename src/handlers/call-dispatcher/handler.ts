@@ -9,10 +9,10 @@
 
 import { buildTableroApiClient } from '../../services/tablero-api-client.factory.js';
 import { buildElevenLabsClient } from '../../services/elevenlabs-client.factory.js';
-import { groupOrders } from '../../services/order-status-promoter.js';
-import { getCourseWeek, clasificarConexion } from '../../services/urgency-classifier.js';
+import { findCourseEvaluation } from '../../services/course-lookup.js';
 import { runGuardrails } from '../../services/guardrails.js';
 import { FollowupRepository } from '../../repositories/followup-repository.js';
+import { QuotaRepository } from '../../repositories/quota-repository.js';
 import { ConditionalCheckFailedError } from '../../repositories/base-repository.js';
 import { env } from '../../utils/env.js';
 import { logger } from '../../utils/logger.js';
@@ -42,6 +42,7 @@ export interface DispatchResult {
 
 export interface DispatcherDeps {
   followupRepository?: FollowupRepository;
+  quotaRepository?: QuotaRepository;
   tableroClient?: TableroApiClient;
   elevenLabsClient?: ElevenLabsClient;
   /** Solo para tests/demo: fuerza el escenario del mock (success/no_answer/busy/error). */
@@ -54,6 +55,7 @@ export async function dispatchFollowup(
   deps: DispatcherDeps = {},
 ): Promise<DispatchResult> {
   const followupRepository = deps.followupRepository ?? new FollowupRepository();
+  const quotaRepository = deps.quotaRepository ?? new QuotaRepository();
   const tableroClient = deps.tableroClient ?? buildTableroApiClient();
   const elevenLabsClient = deps.elevenLabsClient ?? buildElevenLabsClient(deps.forcedMockScenario);
 
@@ -66,14 +68,13 @@ export async function dispatchFollowup(
   }
 
   // --- Revalidacion (prompt §5.3, el paso mas critico del flujo) ---
-  const records = await tableroClient.search({ seccion: 'A_RIESGO_CONEXION' });
-  const groups = groupOrders(records);
-  const group = groups.find(
-    (g) =>
-      g.clientId === followup.contexto.clientId && g.orderNumber === followup.contexto.orderNumber,
+  const evaluation = await findCourseEvaluation(
+    tableroClient,
+    followup.contexto.clientId,
+    followup.contexto.orderNumber,
   );
 
-  if (!group) {
+  if (!evaluation) {
     await followupRepository.setEstado(followupId, 'RESUELTO_SIN_LLAMADA');
     logger.info('dispatcher_resuelto_sin_llamada', {
       followupId,
@@ -82,22 +83,28 @@ export async function dispatchFollowup(
     return { followupId, outcome: 'resuelto_sin_llamada', motivo: 'oc_ya_no_aparece_en_semaforo' };
   }
 
-  const semana = getCourseWeek(group.initCourse, group.endCourse);
-  const nivel = clasificarConexion(semana, group.pctConexion);
-  if (nivel !== 'CRITICO') {
+  if (evaluation.nivel !== 'CRITICO') {
     await followupRepository.setEstado(followupId, 'RESUELTO_SIN_LLAMADA');
     logger.info('dispatcher_resuelto_sin_llamada', {
       followupId,
       motivo: 'ya_no_es_critico',
-      nivelActual: nivel,
+      nivelActual: evaluation.nivel,
     });
     return { followupId, outcome: 'resuelto_sin_llamada', motivo: 'ya_no_es_critico' };
   }
 
   // --- Guardrails, revalidados (misma pieza que el evaluador, prompt §1.4) ---
-  const guard = runGuardrails(followup.destinatarioPhone, { now: deps.now });
+  // El contador de cuota sale de la base (QuotaRepository), no de memoria: con un plan de muy
+  // pocos minutos la cuota tiene que sobrevivir reinicios y ser la misma para todos los
+  // caminos que originan una llamada. Este peek solo sirve para cortar temprano con un motivo
+  // legible; el gate real es el `tryConsume` atomico de mas abajo.
+  const quotaSnapshot = await quotaRepository.peek(env.dailyQuota, deps.now);
+  const guard = runGuardrails(followup.destinatarioPhone, {
+    now: deps.now,
+    dailyCountSoFar: quotaSnapshot.usados,
+  });
   if (!guard.allowed) {
-    if (guard.motivo === 'fuera_de_ventana_horaria') {
+    if (guard.motivo === 'fuera_de_ventana_horaria' || guard.motivo === 'cuota_diaria_alcanzada') {
       await followupRepository.setEstado(followupId, 'DIFERIDO', {
         nextAttemptAt: tomorrowAtBusinessHoursStart(),
       });
@@ -115,6 +122,17 @@ export async function dispatchFollowup(
       return { followupId, outcome: 'obsoleto', motivo: 'ya_tomado_por_otro_worker' };
     }
     throw err;
+  }
+
+  // --- Cuota diaria, gate atomico (despues del anti doble disparo: si otro worker se llevo
+  // este followup, no queremos haber gastado un slot de cuota por nada) ---
+  const consumed = await quotaRepository.tryConsume(env.dailyQuota, deps.now);
+  if (!consumed.ok) {
+    await followupRepository.setEstado(followupId, 'DIFERIDO', {
+      nextAttemptAt: tomorrowAtBusinessHoursStart(),
+    });
+    logger.warn('dispatcher_reagendado_por_cuota', { followupId, usados: consumed.usados });
+    return { followupId, outcome: 'reagendado', motivo: 'cuota_diaria_alcanzada' };
   }
 
   const callResult = await elevenLabsClient.startOutboundCall({

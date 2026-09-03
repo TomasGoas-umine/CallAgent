@@ -142,6 +142,39 @@ export abstract class BaseRepository {
     }
   }
 
+  /**
+   * Igual que `updateItemConditional`, pero devuelve los atributos actualizados
+   * (`ReturnValues: 'UPDATED_NEW'`). Necesario para contadores atomicos (`ADD`), donde el
+   * valor resultante es justamente lo que el llamador necesita saber.
+   */
+  protected async updateItemConditionalReturning(
+    key: DynamoKey,
+    updateExpression: string,
+    conditionExpression: string,
+    expressionAttributeValues: Record<string, unknown>,
+    expressionAttributeNames?: Record<string, string>,
+  ): Promise<Record<string, unknown> | undefined> {
+    try {
+      const result = await this.doc.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: key,
+          UpdateExpression: updateExpression,
+          ConditionExpression: conditionExpression,
+          ExpressionAttributeValues: expressionAttributeValues,
+          ExpressionAttributeNames: expressionAttributeNames,
+          ReturnValues: 'UPDATED_NEW',
+        }),
+      );
+      return result.Attributes;
+    } catch (err) {
+      if (isConditionalCheckFailed(err)) {
+        throw new ConditionalCheckFailedError();
+      }
+      throw err;
+    }
+  }
+
   protected async query<T>(params: Omit<QueryCommandInput, 'TableName'>): Promise<T[]> {
     const result = await this.doc.send(new QueryCommand({ TableName: this.tableName, ...params }));
     return (result.Items as T[] | undefined) ?? [];

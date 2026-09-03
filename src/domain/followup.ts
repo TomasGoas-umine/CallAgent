@@ -30,6 +30,14 @@ export interface Followup {
   idempotencyKey: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Como se origino este FOLLOWUP. `manual` = un humano apreto el boton en el micrositio
+   * (unico camino habilitado mientras el plan sea Starter); `automatico` = candidate-evaluator.
+   * Opcional porque los FOLLOWUP creados antes de que existiera el campo no lo tienen.
+   */
+  origen?: 'manual' | 'automatico';
+  /** Quien disparo la llamada, cuando `origen === 'manual'`. Traza para auditoria. */
+  requestedBy?: string;
   /** Contexto necesario para revalidar y para construir dynamic_variables del agente. */
   contexto: {
     clientId: string;
@@ -54,4 +62,13 @@ export interface FollowupCall {
   dataCollection: Record<string, unknown>;
   evaluation: Record<string, unknown>;
   transcriptS3Key: string | null;
+  /**
+   * Transcripcion tal como la entrega ElevenLabs. Se PERSISTE (el operador necesita poder
+   * leerla en el micrositio) pero nunca se loguea: `logger.ts` la omite explicitamente.
+   * `transcriptS3Key` queda para cuando el volumen justifique moverla a S3.
+   */
+  transcript?: Array<{ role: string; message: string; time_in_call_secs?: number }>;
+  transcriptSummary?: string | null;
+  /** Resultado ya clasificado por `call-outcome-classifier` (taxonomia unica). */
+  outcome?: string;
 }

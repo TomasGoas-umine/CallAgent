@@ -23,3 +23,19 @@ export function retryBackoffMs(): number {
   if (env.retryBackoffSecondsOverride !== null) return env.retryBackoffSecondsOverride * 1000;
   return 24 * 60 * 60 * 1000;
 }
+
+/**
+ * Clave de dia habil en la zona horaria del negocio (`TIMEZONE`), formato `YYYY-MM-DD`.
+ * La cuota diaria es una cuota de DIA DE NEGOCIO, no de dia UTC: si se usara UTC, la cuota
+ * se reiniciaria a las 20:00/21:00 de Santiago, en mitad de la ventana horaria de llamada.
+ */
+export function businessDateKey(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: env.timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
