@@ -253,6 +253,7 @@ async function chequearTwilio(): Promise<void> {
           'Verifica tus dos numeros en Twilio Console -> Phone Numbers -> Verified Caller IDs',
       );
     }
+    await chequearGeoPermissions(auth);
   } else if (res.status === 401) {
     falta('Twilio rechazo las credenciales (401): revisa el Account SID y el Auth Token');
   } else {
@@ -260,13 +261,74 @@ async function chequearTwilio(): Promise<void> {
   }
 }
 
+/**
+ * Geo Permissions de Twilio: por defecto Twilio BLOQUEA los destinos internacionales. Un numero
+ * de EE.UU. llamando a un movil chileno falla con error 21215 si Chile no esta habilitado — y
+ * ese fallo ocurre DESPUES de que el dispatcher consumio un slot de cuota. Se chequean los
+ * paises de la allowlist, deducidos del prefijo.
+ */
+const PREFIJO_A_ISO: Array<[string, string]> = [
+  ['+56', 'CL'],
+  ['+54', 'AR'],
+  ['+51', 'PE'],
+  ['+57', 'CO'],
+  ['+52', 'MX'],
+  ['+34', 'ES'],
+  ['+1', 'US'],
+];
+
+function isoDeNumero(numero: string): string | null {
+  for (const [prefijo, iso] of PREFIJO_A_ISO) {
+    if (numero.startsWith(prefijo)) return iso;
+  }
+  return null;
+}
+
+async function chequearGeoPermissions(auth: string): Promise<void> {
+  const isos = [...new Set(env.allowlistNumbers.map(isoDeNumero).filter((x): x is string => !!x))];
+  if (isos.length === 0) {
+    aviso(
+      'no se pudo deducir el pais de los numeros de la allowlist: revisa los Geo Permissions a mano',
+    );
+    return;
+  }
+  for (const iso of isos) {
+    const res = await getJson<{
+      name?: string;
+      low_risk_numbers_enabled?: boolean;
+      high_risk_special_numbers_enabled?: boolean;
+    }>(`https://voice.twilio.com/v1/DialingPermissions/Countries/${iso}`, {
+      authorization: `Basic ${auth}`,
+    });
+    if (res.status !== 200) {
+      aviso(
+        `no se pudo leer los Geo Permissions de ${iso} (HTTP ${res.status}). Revisalos a mano en ` +
+          'Twilio Console -> Voice -> Settings -> Geographic Permissions',
+      );
+      continue;
+    }
+    if (res.body?.low_risk_numbers_enabled) {
+      ok(`Twilio Geo Permissions: llamadas a ${res.body.name ?? iso} HABILITADAS`);
+    } else {
+      falta(
+        `Twilio tiene BLOQUEADAS las llamadas a ${res.body?.name ?? iso}. Tu numero es de otro ` +
+          'pais, asi que la llamada va a fallar con error 21215 despues de consumir cuota. ' +
+          'Habilitalo en Twilio Console -> Voice -> Settings -> Geographic Permissions',
+      );
+    }
+  }
+}
+
 function chequearWebhook(): void {
   console.log('\n== 5. Webhook post-call (sin esto no llega el resultado de la llamada) ==');
   if (!env.publicBaseUrl) {
-    falta(
-      'PUBLIC_BASE_URL vacia. Este server corre en localhost, asi que ElevenLabs NO lo puede ' +
-        'alcanzar: la llamada va a ocurrir pero el resultado nunca vuelve y el FOLLOWUP se ' +
-        'queda en DIALING para siempre. Levanta un tunel (ver README, seccion "Llamadas reales")',
+    // DIFERIDO a proposito (UV-051): la fase actual es validar que la llamada suene y converse.
+    // No es bloqueante para eso, asi que se reporta como aviso y no como FALTA.
+    aviso(
+      'PUBLIC_BASE_URL vacia — el webhook post-call NO esta configurado (diferido a proposito, ' +
+        'UV-051). Consecuencia esperada: la llamada suena y conversa, pero el resultado nunca ' +
+        'vuelve; el FOLLOWUP se queda en DIALING y el dashboard no muestra transcripcion ni ' +
+        'clasificacion. Para cerrar el ciclo hace falta un tunel (ver README, "Llamadas reales")',
     );
     return;
   }

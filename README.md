@@ -71,6 +71,22 @@ Codigos de `POST /api/calls`:
 | 503    | `KILL_SWITCH=true`                                                                     |
 | 502    | El proveedor rechazo la originacion                                                    |
 
+## Estado actual (2026-09-03)
+
+**Modo simulacion.** `MOCK_PROVIDERS=true`: el disparador funciona de punta a punta pero contra
+`MockElevenLabsClient`, sin gastar minutos. Para llamar de verdad, ver la seccion siguiente.
+
+Pendientes con los que hay que contar antes de dar esto por cerrado:
+
+| Ticket     | Que falta                                                                                                                                                          | Impacto                                                                                                                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **UV-051** | **Webhook post-call sin configurar — DIFERIDO a proposito.** Requiere un tunel + `PUBLIC_BASE_URL` + registrar la URL en ElevenLabs y guardar su secreto de firma. | Con llamadas reales, cada FOLLOWUP queda en `DIALING` para siempre: no llega transcripcion, ni campos extraidos, ni clasificacion. `GET /api/health` lo reporta en `webhookPostCall` y el banner del micrositio lo avisa. |
+| UV-042     | La `events.Rule` de cron en `infra/` sigue declarada                                                                                                               | Bloqueante de despliegue: contradice "ninguna llamada se dispara sola"                                                                                                                                                    |
+| UV-043     | La API no tiene autenticacion                                                                                                                                      | No exponer mas alla de localhost hasta resolverlo                                                                                                                                                                         |
+| UV-027     | Twilio exige numeros `+56 600`/`+56 809` con KYC local en Chile                                                                                                    | Bloqueante externo antes de llamar a un cliente real                                                                                                                                                                      |
+
+Backlog completo en `docs/spec.csv`.
+
 ## Llamadas reales (salir del modo simulacion)
 
 Por defecto `MOCK_PROVIDERS=true`: el disparador simula y no se gasta un minuto. Para llamar de

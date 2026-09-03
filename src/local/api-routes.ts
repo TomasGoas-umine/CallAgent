@@ -103,6 +103,16 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
       allowlist: env.allowlistNumbers.map((value) => ({ value, masked: maskPhone(value) })),
       /** El disparo automatico esta deliberadamente apagado (plan Starter). */
       disparoAutomatico: false,
+      /**
+       * Estado del webhook post-call. Sin el, una llamada real suena y conversa pero su
+       * resultado nunca vuelve: el FOLLOWUP se queda en DIALING sin transcripcion ni
+       * clasificacion. Se expone para que el micrositio lo avise en vez de que parezca un bug
+       * (hoy esta diferido a proposito, ver UV-051).
+       */
+      webhookPostCall: {
+        configurado: Boolean(env.publicBaseUrl),
+        url: env.publicBaseUrl ? `${env.publicBaseUrl}/webhooks/elevenlabs/post-call` : null,
+      },
     });
   });
 

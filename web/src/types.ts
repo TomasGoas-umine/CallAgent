@@ -21,6 +21,7 @@ export interface Health {
   ventanaHoraria: { inicio: string; fin: string; timezone: string; abiertaAhora: boolean };
   allowlist: AllowlistEntry[];
   disparoAutomatico: boolean;
+  webhookPostCall: { configurado: boolean; url: string | null };
 }
 
 export interface CursoTablero {

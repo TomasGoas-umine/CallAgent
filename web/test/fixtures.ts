@@ -15,6 +15,7 @@ export const HEALTH_OK: Health = {
   },
   allowlist: [{ value: '+56900100141', masked: '***0141' }],
   disparoAutomatico: false,
+  webhookPostCall: { configurado: true, url: 'https://ejemplo.test/webhooks/elevenlabs/post-call' },
 };
 
 export const CURSO_CRITICO: CursoTablero = {

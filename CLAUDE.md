@@ -117,6 +117,13 @@ npm run web:dev              # micrositio en :5173 (en otra terminal)
   (`services/guardrails.ts`), asi que un numero fuera de `ALLOWLIST_NUMBERS` responde 403 igual.
   Lo que hace el front es avisar el motivo antes. **No muevas el chequeo de allowlist al front.**
 
+**El webhook post-call esta DIFERIDO a proposito** (UV-051, decision del 2026-09-03). Si corres
+con `MOCK_PROVIDERS=false`, la llamada suena y conversa pero su resultado nunca vuelve: el
+FOLLOWUP se queda en `DIALING`, sin transcripcion ni clasificacion. **No es un bug** — falta el
+tunel + `PUBLIC_BASE_URL` + el webhook registrado en ElevenLabs. `GET /api/health` lo reporta en
+`webhookPostCall` y el banner del micrositio lo avisa. Antes de "arreglar" followups colgados en
+DIALING, revisa si es esto.
+
 **La cuota diaria es persistente** (`QuotaRepository`, `QUOTA#<fecha> COUNTER` con `ADD`
 condicional atomico) y la consume el dispatcher justo despues de la escritura condicional
 READY->DIALING. No la cuentes en memoria en ningun lugar nuevo. Cuenta llamadas **originadas**,

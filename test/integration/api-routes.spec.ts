@@ -163,6 +163,20 @@ describe('GET /api/health', () => {
     expect(body.cuota).toMatchObject({ usados: 2, limite: 5, restantes: 3 });
     expect(body.ventanaHoraria).toMatchObject({ abiertaAhora: true });
     expect(body.allowlist).toEqual([{ value: DEMO_PHONE, masked: '***0141' }]);
+    // Sin PUBLIC_BASE_URL el webhook post-call no esta configurado: el micrositio lo avisa en
+    // vez de dejar que un followup en DIALING parezca un bug (UV-051).
+    expect(body.webhookPostCall).toEqual({ configurado: false, url: null });
+    await app.close();
+  });
+
+  it('reporta el webhook post-call como configurado cuando hay PUBLIC_BASE_URL', async () => {
+    process.env.PUBLIC_BASE_URL = 'https://tunel-de-prueba.test';
+    const { app } = await buildTestApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/health' })).json();
+    expect(body.webhookPostCall).toEqual({
+      configurado: true,
+      url: 'https://tunel-de-prueba.test/webhooks/elevenlabs/post-call',
+    });
     await app.close();
   });
 
