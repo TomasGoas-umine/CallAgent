@@ -28,7 +28,8 @@ import { originateManualCall, type ManualCallStatus } from '../services/manual-c
 import { FollowupRepository } from '../repositories/followup-repository.js';
 import { ContactRepository } from '../repositories/contact-repository.js';
 import { QuotaRepository } from '../repositories/quota-repository.js';
-import { ALL_FOLLOWUP_ESTADOS } from '../domain/followup.js';
+import { buildAgentDynamicVariables } from '../services/agent-variables.js';
+import { ALL_FOLLOWUP_ESTADOS, MOTIVO_RIESGO_CONEXION } from '../domain/followup.js';
 import { env } from '../utils/env.js';
 import { logger, maskPhone } from '../utils/logger.js';
 import type { ManualCallDeps } from '../services/manual-call.js';
@@ -153,6 +154,17 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
            * GET /api/health.
            */
           llamable: e.nivel === 'CRITICO',
+          /**
+           * Exactamente las dynamic_variables que recibiria el agente si se dispara esta
+           * llamada. Salen del mismo modulo que usa el dispatcher, para que el modal de
+           * confirmacion no muestre algo distinto de lo que se envia.
+           */
+          variablesAgente: buildAgentDynamicVariables({
+            clientName: primero?.client_name ?? e.group.clientId,
+            courseName: e.group.courseName,
+            orderNumber: e.group.orderNumber,
+            motivo: MOTIVO_RIESGO_CONEXION,
+          }),
           /** Cosas que el operador deberia ver antes de llamar, sin que bloqueen el boton. */
           advertencias: [
             ...(phone ? [] : ['el Semaforo no trae telefono para este curso']),

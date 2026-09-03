@@ -3,6 +3,12 @@
  * Modelo de datos: ver docs/architecture/ARCHITECTURE.md y prompt §8 (single-table DynamoDB).
  */
 
+/**
+ * Unico motivo en alcance del MVP (prompt §5.1: Seccion A - Riesgo Conexion - CRITICO).
+ * Estaba repetido como constante local en candidate-evaluator y manual-call.
+ */
+export const MOTIVO_RIESGO_CONEXION = 'riesgo_conexion_critico';
+
 export type FollowupEstado =
   | 'READY'
   | 'DIALING'

@@ -1,0 +1,365 @@
+/*
+ * CSS plano, sin framework ni libreria de UI (requisito: componentes autocontenidos, listos
+ * para embeberse en un core de Umine). Todo va prefijado con `uv-` para no colisionar con los
+ * estilos del host.
+ */
+
+.uv-root {
+  --uv-bg: #f7f8fa;
+  --uv-surface: #ffffff;
+  --uv-border: #e2e5ea;
+  --uv-text: #1c2230;
+  --uv-muted: #6b7280;
+  --uv-critico: #c0392b;
+  --uv-critico-bg: #fdecea;
+  --uv-alerta: #b26a00;
+  --uv-alerta-bg: #fff6e5;
+  --uv-normal: #1e7a45;
+  --uv-normal-bg: #e9f7ef;
+  --uv-accent: #1f4b99;
+  --uv-danger: #c0392b;
+
+  box-sizing: border-box;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 14px;
+  color: var(--uv-text);
+  background: var(--uv-bg);
+  min-height: 100%;
+  padding: 16px;
+}
+
+.uv-root *,
+.uv-root *::before,
+.uv-root *::after {
+  box-sizing: inherit;
+}
+
+/* --- Banner permanente de modo --- */
+.uv-banner {
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  align-items: center;
+}
+
+.uv-banner--mock {
+  background: var(--uv-normal-bg);
+  border-color: #b7e0c6;
+  color: var(--uv-normal);
+}
+
+.uv-banner--real {
+  background: var(--uv-critico-bg);
+  border-color: #f0b3ad;
+  color: var(--uv-critico);
+}
+
+.uv-banner__meta {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--uv-muted);
+}
+
+/* --- Tabs --- */
+.uv-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--uv-border);
+  margin-bottom: 16px;
+}
+
+.uv-tab {
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: 8px 16px;
+  font: inherit;
+  cursor: pointer;
+  color: var(--uv-muted);
+  border-radius: 6px 6px 0 0;
+}
+
+.uv-tab[aria-selected='true'] {
+  background: var(--uv-surface);
+  border-color: var(--uv-border);
+  color: var(--uv-text);
+  font-weight: 600;
+  margin-bottom: -1px;
+}
+
+/* --- Paneles y tablas --- */
+.uv-panel {
+  background: var(--uv-surface);
+  border: 1px solid var(--uv-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.uv-panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.uv-panel__title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.uv-table-wrap {
+  overflow-x: auto;
+}
+
+.uv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.uv-table th,
+.uv-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--uv-border);
+  vertical-align: top;
+}
+
+.uv-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--uv-muted);
+  white-space: nowrap;
+}
+
+.uv-table tbody tr:hover {
+  background: #fafbfc;
+}
+
+.uv-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.uv-mono {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+/* --- Badges --- */
+.uv-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.uv-badge--critico {
+  background: var(--uv-critico-bg);
+  color: var(--uv-critico);
+}
+
+.uv-badge--alerta {
+  background: var(--uv-alerta-bg);
+  color: var(--uv-alerta);
+}
+
+.uv-badge--normal {
+  background: var(--uv-normal-bg);
+  color: var(--uv-normal);
+}
+
+.uv-badge--neutro {
+  background: #eef0f3;
+  color: var(--uv-muted);
+}
+
+/* --- Controles --- */
+.uv-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.uv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.uv-field__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--uv-muted);
+}
+
+.uv-select,
+.uv-button {
+  font: inherit;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--uv-border);
+  background: var(--uv-surface);
+  color: var(--uv-text);
+}
+
+.uv-select {
+  min-width: 220px;
+  max-width: 520px;
+}
+
+.uv-button {
+  cursor: pointer;
+}
+
+.uv-button--primary {
+  background: var(--uv-accent);
+  border-color: var(--uv-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.uv-button--danger {
+  background: var(--uv-danger);
+  border-color: var(--uv-danger);
+  color: #fff;
+  font-weight: 600;
+}
+
+.uv-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.uv-button--link {
+  background: none;
+  border: none;
+  color: var(--uv-accent);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+}
+
+/* --- Mensajes --- */
+.uv-note {
+  font-size: 12px;
+  color: var(--uv-muted);
+}
+
+.uv-blocked {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--uv-critico-bg);
+  border: 1px solid #f0b3ad;
+  color: var(--uv-critico);
+  font-size: 13px;
+}
+
+.uv-blocked ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.uv-ok {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--uv-normal-bg);
+  border: 1px solid #b7e0c6;
+  color: var(--uv-normal);
+  font-size: 13px;
+}
+
+/* --- Modal --- */
+.uv-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 33, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1000;
+}
+
+.uv-modal {
+  background: var(--uv-surface);
+  border-radius: 10px;
+  padding: 20px;
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.uv-modal__title {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.uv-modal__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.uv-kv {
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+  margin: 10px 0;
+}
+
+.uv-kv__k {
+  color: var(--uv-muted);
+}
+
+.uv-detail {
+  background: #fafbfc;
+  border-top: 1px solid var(--uv-border);
+  padding: 12px 16px;
+}
+
+.uv-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.uv-turn {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.uv-turn__role {
+  flex: 0 0 70px;
+  color: var(--uv-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  padding-top: 2px;
+}

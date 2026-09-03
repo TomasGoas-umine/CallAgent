@@ -25,10 +25,11 @@ import { IdempotencyRepository } from '../repositories/idempotency-repository.js
 import { QuotaRepository, type QuotaSnapshot } from '../repositories/quota-repository.js';
 import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
+import { MOTIVO_RIESGO_CONEXION } from '../domain/followup.js';
 import type { Followup } from '../domain/followup.js';
 import type { TableroApiClient } from './tablero-api-client.js';
 
-const MOTIVO = 'riesgo_conexion_critico';
+const MOTIVO = MOTIVO_RIESGO_CONEXION;
 
 /**
  * Namespace para la idempotency key del disparo manual. La key la elige el cliente (header

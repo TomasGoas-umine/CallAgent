@@ -23,7 +23,11 @@
     "local:seed": "tsx --env-file=.env scripts/seed-local.ts",
     "local:server": "tsx --env-file=.env src/local/server.ts",
     "local:demo": "tsx --env-file=.env scripts/local-demo.ts",
-    "fixture:generate": "tsx scripts/generate-fixture.ts"
+    "fixture:generate": "tsx scripts/generate-fixture.ts",
+    "web:install": "npm --prefix web install",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:test": "npm --prefix web test"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.649.0",

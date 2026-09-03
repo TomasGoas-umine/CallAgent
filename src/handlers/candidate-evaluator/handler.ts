@@ -20,10 +20,11 @@ import { env } from '../../utils/env.js';
 import { logger } from '../../utils/logger.js';
 import { ok } from '../../utils/responses.js';
 import { tomorrowAtBusinessHoursStart } from '../../utils/scheduling.js';
+import { MOTIVO_RIESGO_CONEXION } from '../../domain/followup.js';
 import type { Followup } from '../../domain/followup.js';
 import type { ApiResponse } from '../../utils/responses.js';
 
-const MOTIVO = 'riesgo_conexion_critico';
+const MOTIVO = MOTIVO_RIESGO_CONEXION;
 
 export interface EvaluatorDeps {
   followupRepository?: FollowupRepository;

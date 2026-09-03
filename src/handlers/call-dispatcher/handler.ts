@@ -10,6 +10,7 @@
 import { buildTableroApiClient } from '../../services/tablero-api-client.factory.js';
 import { buildElevenLabsClient } from '../../services/elevenlabs-client.factory.js';
 import { findCourseEvaluation } from '../../services/course-lookup.js';
+import { buildAgentDynamicVariables } from '../../services/agent-variables.js';
 import { runGuardrails } from '../../services/guardrails.js';
 import { FollowupRepository } from '../../repositories/followup-repository.js';
 import { QuotaRepository } from '../../repositories/quota-repository.js';
@@ -139,12 +140,12 @@ export async function dispatchFollowup(
     agentId: env.elevenlabsAgentId,
     agentPhoneNumberId: env.elevenlabsAgentPhoneNumberId,
     toNumber: followup.destinatarioPhone,
-    dynamicVariables: {
-      nombre_cliente: followup.contexto.clientName,
-      curso: followup.contexto.courseName,
-      orden_compra: followup.contexto.orderNumber,
+    dynamicVariables: buildAgentDynamicVariables({
+      clientName: followup.contexto.clientName,
+      courseName: followup.contexto.courseName,
+      orderNumber: followup.contexto.orderNumber,
       motivo: followup.motivo,
-    },
+    }),
   });
 
   if (!callResult.success) {
