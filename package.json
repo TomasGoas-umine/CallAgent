@@ -2,7 +2,7 @@
   "name": "umine-voice",
   "version": "0.1.0",
   "private": true,
-  "description": "Umine Voice — agente de voz que detecta urgencias en el Semaforo operacional, llama via Twilio+ElevenLabs y registra el resultado.",
+  "description": "Umine Voice \u2014 agente de voz que detecta urgencias en el Semaforo operacional, llama via Twilio+ElevenLabs y registra el resultado.",
   "engines": {
     "node": ">=24 <25"
   },
@@ -24,11 +24,19 @@
     "local:server": "tsx --env-file=.env src/local/server.ts",
     "local:demo": "tsx --env-file=.env scripts/local-demo.ts",
     "fixture:generate": "tsx scripts/generate-fixture.ts",
+    "semaforo:probe": "tsx --env-file=.env scripts/semaforo-probe.ts",
+    "semaforo:capture-sample": "tsx scripts/capture-real-sample.ts",
     "providers:check": "tsx --env-file=.env scripts/providers-check.ts",
+    "agent:check": "tsx --env-file=.env scripts/agent-check.ts",
+    "tunnel:up": "tsx --env-file=.env scripts/tunnel-up.ts",
+    "webhook:selftest": "tsx --env-file=.env scripts/webhook-selftest.ts",
+    "calls:sync": "tsx --env-file=.env scripts/calls-sync.ts",
     "web:install": "npm --prefix web install",
     "web:dev": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
-    "web:test": "npm --prefix web test"
+    "web:test": "npm --prefix web test",
+    "webhook:configure": "tsx --env-file=.env scripts/webhook-configure.ts",
+    "webhook:connect": "tsx --env-file=.env scripts/tunnel-up.ts --configure"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.649.0",

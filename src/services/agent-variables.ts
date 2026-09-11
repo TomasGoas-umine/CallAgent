@@ -7,6 +7,25 @@
  * se enviaria otra en cuanto alguien cambie el dispatcher.
  */
 
+import type { CourseEvaluation } from './course-lookup.js';
+
+/** Usa datos del registro fresco; los fallbacks visuales del agrupador no son datos de voz. */
+export function buildCourseAgentVariables(
+  evaluation: CourseEvaluation,
+  motivo: string,
+): Record<string, string> {
+  const record = evaluation.group.records[0];
+  return buildAgentDynamicVariables({
+    clientName: record?.client_name ?? '',
+    courseName: record?.course_name ?? '',
+    orderNumber: evaluation.group.orderNumber,
+    motivo,
+    contactoNombre: evaluation.contactoNombre,
+    diasRestantes: evaluation.diasRestantes,
+    pctConexion: evaluation.group.pctConexion,
+  });
+}
+
 export interface AgentVariablesInput {
   clientName: string;
   courseName: string;
@@ -25,20 +44,27 @@ export interface AgentVariablesInput {
  * `{{placeholder}}` en voz alta.
  *
  * Agente actual ("Sence", es): nombre_interlocutor, nombre_cliente, nombre_curso,
- * dias_restantes, pct_conexion. Se mandan tambien orden_compra y motivo como extras utiles
- * (variables de sobra no molestan; las que faltan si).
+ * dias_restantes, pct_conexion, orden_compra y motivo. La configuración versionable vive en
+ * scripts/lib/sence-agent-config.ts; el test de contrato verifica que ambas partes coincidan.
  *
  * Si cambias el prompt del agente y agregas una variable, hay que agregarla ACA tambien.
- * `npm run providers:check` no lo detecta: revisalo a mano contra el panel.
+ * `npm run agent:check` contrasta este contrato con el agente remoto sin llamar.
  */
 export function buildAgentDynamicVariables(input: AgentVariablesInput): Record<string, string> {
   return {
     nombre_interlocutor: input.contactoNombre?.trim() || 'el encargado de capacitacion',
-    nombre_cliente: input.clientName,
-    nombre_curso: input.courseName,
-    dias_restantes: String(input.diasRestantes ?? ''),
-    pct_conexion: input.pctConexion === undefined ? '' : `${Math.round(input.pctConexion)}%`,
-    orden_compra: input.orderNumber,
-    motivo: input.motivo,
+    nombre_cliente: input.clientName.trim(),
+    nombre_curso: input.courseName.trim(),
+    dias_restantes: Number.isFinite(input.diasRestantes) ? String(input.diasRestantes) : '',
+    // No redondear a entero: 99.6% no es conexión completa y 12.5% debe conservarse.
+    pct_conexion:
+      input.pctConexion !== undefined &&
+      Number.isFinite(input.pctConexion) &&
+      input.pctConexion >= 0 &&
+      input.pctConexion <= 100
+        ? `${input.pctConexion === 100 ? 100 : Math.min(99.999999, Number(input.pctConexion.toFixed(6)))}%`
+        : '',
+    orden_compra: input.orderNumber.trim(),
+    motivo: input.motivo.trim(),
   };
 }

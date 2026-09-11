@@ -47,18 +47,24 @@ el tiempo de reaccion.
 
 ## Riesgos heredados de la auditoria de `tablero-api` (hechos ya verificados, no opiniones)
 
-- **Paginacion rota**: `GET /tablero/search` siempre devuelve `nextCursor: null` y tiene un
-  limite hardcodeado de 15000 registros. Puede fallar con `Function.ResponseSizeTooLarge` si
-  la respuesta supera ~6MB (~19.087 registros reales al momento de la auditoria).
-  `HttpTableroApiClient` detecta y loguea esta condicion como metrica — nunca falla en
-  silencio (ver `src/services/tablero-api-client.http.ts`).
-- **Autenticacion debil**: solo valida presencia de un Bearer token de Firebase, no la firma
-  (gateado por `REQUIRE_AUTH`, que puede no estar seteada). Umine Voice trata a tablero-api
-  como fuente de solo lectura y nunca le escribe.
+- ~~**Paginacion rota**: siempre devuelve `nextCursor: null`.~~ **CORREGIDO el 2026-09-09**: se
+  verifico contra prod que la paginacion SI funciona (`nextCursor` real, `hasMore`), y que
+  creerle a esta afirmacion costaba ver solo el 68% del dataset. `HttpTableroApiClient` ahora
+  pagina de verdad, con `limit` de 2000 por pagina. Sigue siendo cierto que sin `limit` la
+  respuesta se acerca al `Function.ResponseSizeTooLarge` (~6MB). Ver
+  `docs/SEMAFORO_INTEGRACION.md` §6-7.
+- **Sin autenticacion efectiva**: verificado el 2026-09-09 — el API devuelve el dataset completo
+  SIN token (`REQUIRE_AUTH` no esta en `true` en prod). Es mas debil de lo que decia la auditoria
+  original ("valida presencia de Bearer"). Umine Voice trata a tablero-api como fuente de solo
+  lectura y nunca le escribe.
 - **No existe campo de telefono** en ningun punto de la cadena `po -> pod ->
 execution-sence -> tablero-api`, ni de alumno ni de encargado de capacitacion. Tampoco
   existe `do_not_call`, ni se expone `last_sence_sync` real (solo `updated_at`, que puede
-  reflejar ediciones manuales). Por eso el MVP usa `FixtureTableroApiClient` con un campo
+  reflejar ediciones manuales y que llega con tipos MEZCLADOS: ISO string en unos registros y
+  epoch en milisegundos en otros — por eso existe `src/utils/dates.ts`). Si existe
+  `student_email`, poblado en ~64% de los registros: es un canal de contacto real que la
+  auditoria original no habia registrado, aunque no responde UV-023. Por eso el MVP usa
+  `FixtureTableroApiClient` con un campo
   sintetico `phone_test_only` explicitamente marcado como dato de prueba — nunca se debe
   inferir que ese dato existe en produccion.
 

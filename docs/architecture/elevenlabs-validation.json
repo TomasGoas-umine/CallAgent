@@ -1,0 +1,84 @@
+{
+  "verified_at": "2026-09-09T20:26:40.072Z",
+  "agent_id": "agent_5201m1f6e9ccfb6t5gafcw2azzrk",
+  "branch_id": "agtbrch_4001m1f6eapce618c4vn02zecdzx",
+  "version_id": "agtvrsn_0501m23xb1eve5x91xhkj2wt541t",
+  "nodes": 15,
+  "connections": 60,
+  "workflow_tests": [
+    {
+      "test_id": "test_8601m23xfz65fbpt1c7hxzzs17mp",
+      "name": "Umine workflow: diagnostico → soporte",
+      "status": "passed"
+    },
+    {
+      "test_id": "test_4801m23xg0wme2c9hg3kkfy84sdy",
+      "name": "Umine workflow: acuerdo → cierre_acuerdo",
+      "status": "passed"
+    },
+    {
+      "test_id": "test_7201m23xfypsftba9dnp5786m09e",
+      "name": "Umine workflow: identificacion → contexto",
+      "status": "passed"
+    }
+  ],
+  "simulations": [
+    {
+      "scenario": "sim-no-contactar",
+      "expected_outcome": "do_not_call",
+      "actual_outcome": "do_not_call",
+      "extracted": {
+        "motivo_no_conexion": "no_contactar",
+        "tiene_bloqueo_tecnico": false,
+        "compromiso_fecha": "",
+        "requiere_humano": false,
+        "necesidad_capacitacion_futura": ""
+      }
+    },
+    {
+      "scenario": "sim-resuelto",
+      "expected_outcome": "resolved",
+      "actual_outcome": "resolved",
+      "extracted": {
+        "motivo_no_conexion": "resuelto_segun_interlocutor",
+        "tiene_bloqueo_tecnico": false,
+        "compromiso_fecha": "",
+        "requiere_humano": false,
+        "necesidad_capacitacion_futura": ""
+      }
+    },
+    {
+      "scenario": "sim-soporte",
+      "expected_outcome": "human_escalation",
+      "actual_outcome": "human_escalation",
+      "extracted": {
+        "motivo_no_conexion": "Reporta error técnico al ingresar a la plataforma desde ayer; no puede registrar participación y solicita revisión por soporte humano.",
+        "tiene_bloqueo_tecnico": true,
+        "compromiso_fecha": "",
+        "requiere_humano": true,
+        "necesidad_capacitacion_futura": ""
+      }
+    },
+    {
+      "scenario": "sim-acuerdo-controlado",
+      "expected_outcome": "resolved",
+      "actual_outcome": "resolved",
+      "extracted": {
+        "motivo_no_conexion": "El usuario se compromete a coordinar el registro de los participantes para el 15 de septiembre de 2026.",
+        "tiene_bloqueo_tecnico": false,
+        "compromiso_fecha": "15 de septiembre de 2026",
+        "requiere_humano": false,
+        "necesidad_capacitacion_futura": ""
+      }
+    }
+  ],
+  "local_tests": {
+    "unit": 13,
+    "integration": 10
+  },
+  "voice_calls_made": 0,
+  "limitations": [
+    "Simulaciones de texto y pruebas de transiciones; no validación telefónica de extremo a extremo.",
+    "El ajuste local del webhook requiere cargar el código actualizado en el servidor."
+  ]
+}

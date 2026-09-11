@@ -4,6 +4,7 @@ import { FollowupRepository } from '../../src/repositories/followup-repository.j
 import { ContactRepository } from '../../src/repositories/contact-repository.js';
 import { IdempotencyRepository } from '../../src/repositories/idempotency-repository.js';
 import { InMemoryQueueClient } from '../../src/services/queue.js';
+import { FixtureTableroApiClient } from '../../src/services/tablero-api-client.fixture.js';
 import {
   startDynamoServerHarness,
   createTestTable,
@@ -54,6 +55,10 @@ async function freshRepos() {
     contactRepository: new ContactRepository(tableName, serverHarness.doc),
     idempotencyRepository: new IdempotencyRepository(tableName, serverHarness.doc),
     queue: new InMemoryQueueClient(),
+    // Fixture crudo, no el Mock editable: esta suite prueba los descartes del evaluador
+    // (sin_telefono, do_not_call, cooldown) y necesita la variedad de telefonos del JSON.
+    // El Mock, por diseno, usa un unico numero para todas las OCs.
+    tableroClient: new FixtureTableroApiClient(),
   };
 }
 

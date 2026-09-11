@@ -19,7 +19,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import type { TableroApiClient } from './tablero-api-client.js';
+import type { TableroApiClient, TableroSearchResult } from './tablero-api-client.js';
 import type { TableroRecord, TableroSearchFilters } from '../domain/candidate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -95,11 +95,16 @@ export class FixtureTableroApiClient implements TableroApiClient {
     private readonly allowlistNumbers?: string[],
   ) {}
 
-  async search(_filters: TableroSearchFilters): Promise<TableroRecord[]> {
+  async search(_filters: TableroSearchFilters): Promise<TableroSearchResult> {
     const raw = await readFile(this.fixturePath, 'utf-8');
     const records = JSON.parse(raw) as FixtureRecord[];
     const allowlistNumbers = this.allowlistNumbers ?? (await currentAllowlist());
-    return records.map((record) => resolveFixtureRecord(record, { allowlistNumbers }));
+    return {
+      records: records.map((record) => resolveFixtureRecord(record, { allowlistNumbers })),
+      // El fixture es un archivo: no hay paginacion que seguir.
+      paginas: 1,
+      truncado: false,
+    };
   }
 }
 

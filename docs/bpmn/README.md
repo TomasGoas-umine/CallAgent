@@ -46,6 +46,12 @@ actores involucrados en el proceso son:
   diagrama y en la estructura (`webhooks/twilio-status` como stub), pero no implementado —
   ver TODO en `src/handlers/webhooks/twilio-status/handler.ts`.
 
+## Workflow conversacional en ElevenLabs
+
+El detalle de conversación del flujo 2 está configurado como un grafo de 15 nodos en
+ElevenLabs. Fuente versionable, correspondencia con los flujos 3 y 4, campos de análisis y
+límites operativos: [Configuración del agente](../architecture/ELEVENLABS-AGENT.md).
+
 ## Como actualizar estos diagramas
 
 1. Edita el `.mmd` correspondiente en el mismo commit que el cambio de codigo que lo motiva.

@@ -276,3 +276,64 @@ minutos reales solo se conocen cuando llega el webhook post-call, y para entonce
 gastaron. Contar originaciones es la aproximacion conservadora (una llamada que el proveedor
 rechaza tambien consume cuota). Si negocio necesita un tope en minutos, es un ticket aparte
 (UV-044).
+
+---
+
+## ADR-011 — Las secciones B y C del Semaforo se muestran y se editan, pero nunca llaman
+
+**Fecha:** 2026-09-11 · **Estado:** aceptada
+
+**Contexto.** El Semaforo real tiene tres secciones, cada una con su propia pregunta, su propio
+filtro de entrada y su propia escala (docs/SEMAFORO_INTEGRACION.md §3):
+
+| Seccion                 | Pregunta                                               | Escala                        |
+| ----------------------- | ------------------------------------------------------ | ----------------------------- |
+| **A · Riesgo Conexion** | ¿va atrasada la conexion para la semana del curso?     | % contra umbral por semana    |
+| **B · Riesgo DJ**       | ¿cuanto lleva el curso cerrado sin Declaracion Jurada? | dias: >3 ALERTA, >7 CRITICO   |
+| **C · Rectificacion**   | ¿cuanto lleva la OC esperando la OC Final del OTIC?    | dias: >15 ALERTA, >30 CRITICO |
+
+Hasta ahora CallAgent implementaba solo la A: era la unica accionable por telefono y las otras
+dos se dejaron explicitamente fuera. Pero el tablero mentia por omision — un operador que mira
+el Tablero Mock de CallAgent y el Semaforo real lado a lado ve dos cosas distintas, y no puede
+distinguir "esta OC no tiene problemas" de "esta OC tiene un problema que este tablero no sabe
+mirar". Eso vuelve dificil calibrar reglas: sin ver las tres, no se puede razonar sobre cual
+justifica una llamada.
+
+**Decision.** Implementar las tres escalas y mostrarlas, y separar de forma explicita **mostrar**
+de **llamar**:
+
+1. Las tres escalas viven en `urgency-classifier.ts` (`clasificarConexion`, `clasificarDj`,
+   `clasificarRectificacion`) y los tres filtros de entrada en `semaforo-sections.ts`
+   (`gateSeccionA/B/C`). Siguen siendo los mismos cuatro modulos espejo del Semaforo de la regla
+   2 de CLAUDE.md — **no se agrega un quinto**.
+2. Las tres se muestran en vinetas colapsables, como en el original: en el **Tablero Mock**
+   (editables) y en el **Tablero Original** (solo lectura).
+3. **Solo la seccion A puede terminar en una llamada.** `call-rules.ts` no conoce `clasificarDj`
+   ni `clasificarRectificacion`, y `mock-tablero-store` arma `regla` exclusivamente desde el
+   nivel de conexion y el gate de la seccion A. Los campos nuevos del Mock (`djs`,
+   `ultimaActualizacion`) no participan de esa decision.
+
+**Por que B y C no llaman.** No es una limitacion tecnica ni una etapa pendiente: es la naturaleza
+del problema. Una DJ que falta y una OC Final que no llega se resuelven **con el OTIC**, no con el
+alumno — llamar por telefono a quien ya hizo su parte no mueve ninguno de los dos indicadores. El
+canal correcto ahi es el correo al OTIC, que el micrositio original ya ofrece. La conexion
+pendiente, en cambio, si es accionable por telefono: por eso el MVP llama por eso y solo por eso.
+
+**Por que igual son editables en el Mock.** El Tablero Mock es un banco de pruebas: sirve para ver
+como se comporta el Semaforo ante datos que no existen todavia. Poder llevar una OC a "DJ critica"
+y comprobar **que no suena el telefono** es tan util como poder llevarla a "conexion critica" y
+comprobar que si suena. La garantia se prueba con las llamadas automaticas ENCENDIDAS
+(`test/integration/mock-call-trigger.spec.ts`), no solo por inspeccion del codigo.
+
+**Alternativas.** (a) No implementarlas — es el estado anterior, y deja el tablero incompleto
+frente al Semaforo real. (b) Implementarlas y dejarlas conectadas al agente detras de un flag —
+un flag que nadie deberia encender nunca es peor que no tener el camino: invita a encenderlo.
+(c) Hacerlas de solo lectura tambien en el Mock — se pierde justamente la capacidad de probar el
+escenario, que es para lo que existe el Mock.
+
+**Consecuencias.** `OrderGroup` ahora acumula `djCount` y `lastUpdatedAt` (los usa solo B y C; A
+los ignora). El Mock gana dos campos editables, `djs` y `ultimaActualizacion`, con una regla de
+validacion propia: `djs <= conexiones`, porque la seccion B divide DJ sobre CONECTADOS y no sobre
+inscritos. Y queda una regla viva para quien toque esto despues: **si alguna vez una seccion nueva
+tiene que poder llamar, la decision se toma aca y en `call-rules.ts`, nunca agregandole una
+condicion al trigger del Mock.**

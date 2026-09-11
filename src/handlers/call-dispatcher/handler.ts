@@ -9,8 +9,8 @@
 
 import { buildTableroApiClient } from '../../services/tablero-api-client.factory.js';
 import { buildElevenLabsClient } from '../../services/elevenlabs-client.factory.js';
-import { findCourseEvaluation } from '../../services/course-lookup.js';
-import { buildAgentDynamicVariables } from '../../services/agent-variables.js';
+import { findCourseEvaluation, isCourseCallable } from '../../services/course-lookup.js';
+import { buildCourseAgentVariables } from '../../services/agent-variables.js';
 import { runGuardrails } from '../../services/guardrails.js';
 import { FollowupRepository } from '../../repositories/followup-repository.js';
 import { QuotaRepository } from '../../repositories/quota-repository.js';
@@ -84,7 +84,7 @@ export async function dispatchFollowup(
     return { followupId, outcome: 'resuelto_sin_llamada', motivo: 'oc_ya_no_aparece_en_semaforo' };
   }
 
-  if (evaluation.nivel !== 'CRITICO') {
+  if (!isCourseCallable(tableroClient, evaluation)) {
     await followupRepository.setEstado(followupId, 'RESUELTO_SIN_LLAMADA');
     logger.info('dispatcher_resuelto_sin_llamada', {
       followupId,
@@ -138,20 +138,16 @@ export async function dispatchFollowup(
 
   const callResult = await elevenLabsClient.startOutboundCall({
     agentId: env.elevenlabsAgentId,
+    branchId: env.elevenlabsAgentBranchId || undefined,
     agentPhoneNumberId: env.elevenlabsAgentPhoneNumberId,
     toNumber: followup.destinatarioPhone,
     callRecordingEnabled: env.callRecordingEnabled,
+    // Deja el followup_id guardado dentro de la conversacion en ElevenLabs, para poder
+    // recuperar su resultado por API aunque se pierda el item CONVERSATION# local.
+    attributionId: followupId,
     // Los numeros salen de la REVALIDACION (dato fresco del Semaforo), no del contexto
     // guardado en el FOLLOWUP, que puede tener horas de antiguedad.
-    dynamicVariables: buildAgentDynamicVariables({
-      clientName: followup.contexto.clientName,
-      courseName: followup.contexto.courseName,
-      orderNumber: followup.contexto.orderNumber,
-      motivo: followup.motivo,
-      contactoNombre: evaluation.contactoNombre,
-      diasRestantes: evaluation.diasRestantes,
-      pctConexion: evaluation.group.pctConexion,
-    }),
+    dynamicVariables: buildCourseAgentVariables(evaluation, followup.motivo),
   });
 
   if (!callResult.success) {

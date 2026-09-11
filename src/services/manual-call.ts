@@ -17,7 +17,7 @@
 import { randomUUID } from 'node:crypto';
 import { dispatchFollowup, type DispatcherDeps } from '../handlers/call-dispatcher/handler.js';
 import { buildTableroApiClient } from './tablero-api-client.factory.js';
-import { findCourseEvaluation } from './course-lookup.js';
+import { findCourseEvaluation, isCourseCallable } from './course-lookup.js';
 import { isKillSwitchActive, runGuardrails } from './guardrails.js';
 import { FollowupRepository } from '../repositories/followup-repository.js';
 import { ContactRepository } from '../repositories/contact-repository.js';
@@ -47,6 +47,8 @@ export type ManualCallStatus =
   | 'already_processed'
   | 'kill_switch'
   | 'no_en_allowlist'
+  /** Rechazado por la whitelist dura de la etapa de pruebas (ver `guardrails.ts`). */
+  | 'fuera_de_whitelist_pruebas'
   | 'cuota_diaria_alcanzada'
   | 'fuera_de_ventana_horaria'
   | 'do_not_call'
@@ -140,10 +142,10 @@ export async function originateManualCall(
     pctConexion: evaluation.group.pctConexion,
   };
 
-  if (evaluation.nivel !== 'CRITICO') {
+  if (!isCourseCallable(tableroClient, evaluation)) {
     return {
       status: 'curso_no_critico',
-      detalle: `El curso esta en nivel ${evaluation.nivel}: el unico caso de uso del MVP es CRITICO.`,
+      detalle: `El curso esta en nivel ${evaluation.nivel} y no cumple la regla de llamada activa.`,
       cuota,
       curso,
     };
@@ -231,7 +233,7 @@ export async function originateManualCall(
       orderNumber: evaluation.group.orderNumber,
       initCourse: evaluation.group.initCourse,
       endCourse: evaluation.group.endCourse,
-      nivelDetectado: 'CRITICO',
+      nivelDetectado: evaluation.nivel,
       seccion: 'A_RIESGO_CONEXION',
     },
   };
@@ -310,6 +312,8 @@ function detalleGuardrail(motivo: string | undefined, cuota: QuotaSnapshot): str
       return 'KILL_SWITCH=true — no se origina ninguna llamada.';
     case 'no_en_allowlist':
       return 'El numero no esta en ALLOWLIST_NUMBERS.';
+    case 'fuera_de_whitelist_pruebas':
+      return `El numero no esta en la whitelist de pruebas (${env.testPhoneWhitelist.join(', ')}). Mientras dure la etapa de pruebas de llamadas reales, ningun otro numero puede sonar.`;
     case 'fuera_de_ventana_horaria':
       return `Fuera de la ventana horaria (${env.businessHoursStart}-${env.businessHoursEnd} ${env.timezone}, lunes a viernes).`;
     case 'cuota_diaria_alcanzada':

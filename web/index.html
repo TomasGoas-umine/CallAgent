@@ -3,7 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- El tema (claro/oscuro) lo decide el sistema operativo: esto hace que los controles
+         nativos, los scrollbars y el fondo del documento sigan la misma preferencia que
+         `prefers-color-scheme` en styles.css. No hay toggle propio a proposito. -->
+    <meta name="color-scheme" content="light dark" />
     <title>Umine Voice — Operacion</title>
+    <style>
+      /* Solo el shell standalone; embebido, el margen lo pone el host. */
+      html,
+      body {
+        margin: 0;
+      }
+    </style>
   </head>
   <body>
     <div id="umine-voice-root"></div>

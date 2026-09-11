@@ -16,7 +16,14 @@ version: '3.8'
 services:
   dynamodb-local:
     image: amazon/dynamodb-local:2.5.4
-    command: '-jar DynamoDBLocal.jar -sharedDb -inMemory'
+    # `-dbPath` (y NO `-inMemory`): la base tiene que sobrevivir a un reinicio. En memoria se
+    # pierden los items `CONVERSATION#<id> META`, que ligan el conversation_id del webhook
+    # post-call con nuestro followup_id — y sin ese enlace el resultado de una llamada ya
+    # hecha es irrecuperable (ver UV-056). El camino sin Docker (`npm run local:up`, dynalite)
+    # persiste en el mismo directorio, para que los dos se comporten igual.
+    command: '-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data'
     ports:
       - '8000:8000'
     working_dir: /home/dynamodblocal
+    volumes:
+      - ./.dynamo-local-data:/home/dynamodblocal/data

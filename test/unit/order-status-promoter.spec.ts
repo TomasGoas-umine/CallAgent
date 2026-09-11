@@ -19,7 +19,6 @@ function record(overrides: Partial<TableroRecord> = {}): TableroRecord {
     end_course: '2026-08-15',
     rut: '12345678-9',
     sence_connections: 0,
-    enrolled_count: 3,
     order_status: '',
     student_email: 'alumno@correo.cl',
     first_name: 'Juan',
@@ -82,27 +81,68 @@ describe('groupOrders', () => {
     vi.useRealTimers();
   });
 
-  it('agrupa varios alumnos del mismo curso y agrega sence_connections/enrolled_count', () => {
+  it('cuenta inscritos por CANTIDAD de registros, no por un campo del API', () => {
+    // No existe `enrolled_count` en tablero-api: los inscritos se cuentan (useSenceData.ts:169).
     const records = [
-      record({ client_id: 'c1', order_number: '100', enrolled_count: 1, sence_connections: 1 }),
-      record({ client_id: 'c1', order_number: '100', enrolled_count: 1, sence_connections: 0 }),
-      record({ client_id: 'c1', order_number: '100', enrolled_count: 1, sence_connections: 0 }),
+      record({ client_id: 'c1', order_number: '100', sence_connections: 1 }),
+      record({ client_id: 'c1', order_number: '100', sence_connections: 0 }),
+      record({ client_id: 'c1', order_number: '100', sence_connections: 0 }),
     ];
-    const groups = groupOrders(records);
+    const { groups } = groupOrders(records);
     expect(groups).toHaveLength(1);
     expect(groups[0]?.enrolledCount).toBe(3);
     expect(groups[0]?.totalConnections).toBe(1);
     expect(groups[0]?.pctConexion).toBeCloseTo(33.33, 1);
   });
 
-  it('excluye OCs internacionales (order_number empieza con INT)', () => {
-    const records = [record({ order_number: 'INT-500' })];
-    expect(groupOrders(records)).toHaveLength(0);
+  it('cuenta sence_connections === 1, nunca > 0 ni una suma', () => {
+    // Un valor distinto de 1 no cuenta como conectado — el Semaforo compara `=== 1`.
+    const records = [
+      record({ client_id: 'c1', order_number: '100', sence_connections: 1 }),
+      record({ client_id: 'c1', order_number: '100', sence_connections: 2 }),
+      record({ client_id: 'c1', order_number: '100', sence_connections: 0 }),
+    ];
+    const { groups } = groupOrders(records);
+    expect(groups[0]?.enrolledCount).toBe(3);
+    expect(groups[0]?.totalConnections).toBe(1);
   });
 
-  it('excluye grupos cuyo order_status promovido esta en INACTIVE_STATUSES', () => {
-    const records = [record({ order_status: 'REVISAR', end_course: '2026-01-01' })];
-    expect(groupOrders(records)).toHaveLength(0);
+  it('descarta DEAD_ESTADOS antes de agregar, sin inflar los inscritos', () => {
+    // En prod FACTURADA es la mayoria de los registros: si entra, hunde el pct de la OC.
+    const records = [
+      record({ client_id: 'c1', order_number: '100', sence_connections: 1 }),
+      record({ client_id: 'c1', order_number: '100', order_status: 'FACTURADA' }),
+      record({ client_id: 'c1', order_number: '100', order_status: 'BAJA' }),
+    ];
+    const { groups, stats } = groupOrders(records);
+    expect(groups[0]?.enrolledCount).toBe(1);
+    expect(groups[0]?.pctConexion).toBe(100);
+    expect(stats.registrosDescartados.estadoMuerto).toBe(2);
+  });
+
+  it('registra alumnos REVISAR en el grupo pero no los cuenta como inscritos', () => {
+    const records = [
+      record({ client_id: 'c1', order_number: '100', sence_connections: 1 }),
+      record({ client_id: 'c1', order_number: '100', order_status: 'REVISAR' }),
+    ];
+    const { groups, stats } = groupOrders(records);
+    expect(groups[0]?.enrolledCount).toBe(1);
+    expect(groups[0]?.records).toHaveLength(2);
+    expect(stats.registrosDescartados.alumnoInactivo).toBe(1);
+  });
+
+  it('excluye OCs internacionales (order_number empieza con INT)', () => {
+    const { groups, stats } = groupOrders([record({ order_number: 'INT-500' })]);
+    expect(groups).toHaveLength(0);
+    expect(stats.registrosDescartados.ocExcluida).toBe(1);
+  });
+
+  it('una OC enteramente REVISAR conserva ese estado, no queda con estado vacio', () => {
+    // Vaciarlo la haria pasar por "en ejecucion" en el gate de seccion A (estado === '').
+    const { groups } = groupOrders([record({ order_status: 'REVISAR', end_course: '2026-01-01' })]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.enrolledCount).toBe(0);
+    expect(groups[0]?.promotedOrderStatus).toBe('REVISAR');
   });
 
   it('corre promoteOrderStatus antes de agregar, evitando falsos positivos con order_status vacio', () => {
@@ -111,7 +151,7 @@ describe('groupOrders', () => {
     const records = [
       record({ order_status: '', init_course: '2026-09-01', end_course: '2026-10-01' }),
     ];
-    const groups = groupOrders(records);
+    const { groups } = groupOrders(records);
     expect(groups).toHaveLength(1);
     expect(groups[0]?.promotedOrderStatus).toBe('NO INICIADA');
   });
@@ -122,6 +162,6 @@ describe('groupOrders', () => {
       record({ client_id: 'c2', order_number: '100' }),
       record({ client_id: 'c1', order_number: '200' }),
     ];
-    expect(groupOrders(records)).toHaveLength(3);
+    expect(groupOrders(records).groups).toHaveLength(3);
   });
 });

@@ -39,7 +39,33 @@ export interface ElevenLabsPostCallPayload {
     transcript?: Array<{ role: string; message: string; time_in_call_secs?: number }>;
     metadata?: {
       call_duration_secs?: number;
+      /**
+       * Presente solo en payloads simulados/antiguos. El webhook REAL de ElevenLabs no pone el
+       * SID de Twilio aca: viaja en `metadata.phone_call.call_sid` (ver `phone_call` abajo).
+       * Se deja declarado porque los fixtures y el mock lo usan, y porque el handler acepta
+       * ambas formas.
+       */
       call_sid?: string;
+      /**
+       * Bloque que ElevenLabs agrega cuando la conversacion fue una llamada telefonica. Aca
+       * viene el `call_sid` real de Twilio. Sin leerlo, toda llamada real quedaba registrada
+       * con `callSid: null` y no habia forma de cruzarla con el log de Twilio.
+       */
+      phone_call?: {
+        type?: string;
+        call_sid?: string;
+        external_number?: string;
+        agent_number?: string;
+        direction?: string;
+      };
+      /** Inicio real de la llamada. Alimenta `FollowupCall.startedAt` (antes siempre null). */
+      start_time_unix_secs?: number;
+      /**
+       * Por que termino la llamada (texto libre del proveedor). No se interpreta todavia: es la
+       * pista mas probable para distinguir "no contestaron" de "conversacion vacia", pero hay
+       * que calibrarla con payloads reales antes de convertirla en regla (ver UV-053).
+       */
+      termination_reason?: string;
       cost?: number;
     };
     analysis?: {

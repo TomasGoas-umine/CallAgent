@@ -73,6 +73,32 @@ function payloadWithConversation(
 }
 
 describe('webhooks/elevenlabs-post-call', () => {
+  it('conserva la revisión humana y bloquea contacto si también pidió no volver a llamar', async () => {
+    const { followupRepository, contactRepository } = await freshRepos();
+    const followup = makeFollowup();
+    await followupRepository.create(followup);
+    const conversationId = 'conv-humano-y-no-contactar';
+    await followupRepository.linkConversation(conversationId, followup.followupId);
+    const rawBody = JSON.stringify(
+      payloadWithConversation(conversationId, {
+        analysis: {
+          data_collection_results: {
+            requiere_humano: { value: true },
+            motivo_no_conexion: { value: 'no_contactar' },
+          },
+        },
+      }),
+    );
+    const response = await handleElevenLabsPostCall(
+      rawBody,
+      generateTestSignatureHeader(SECRET, rawBody),
+      { followupRepository, contactRepository, webhookSecret: SECRET },
+    );
+    expect(response.statusCode).toBe(200);
+    expect((await followupRepository.getById(followup.followupId))?.estado).toBe('ESCALADO');
+    expect((await contactRepository.getByPhone(followup.destinatarioPhone))?.doNotCall).toBe(true);
+  });
+
   it('rechaza con 401 si la firma es invalida', async () => {
     const { followupRepository, contactRepository } = await freshRepos();
     const rawBody = JSON.stringify(payloadWithConversation('conv-x'));
@@ -232,5 +258,45 @@ describe('webhooks/elevenlabs-post-call', () => {
       webhookSecret: SECRET,
     });
     expect(response.statusCode).toBe(400);
+  });
+
+  it('toma el call_sid de metadata.phone_call y el inicio de start_time_unix_secs (forma real del webhook)', async () => {
+    const { followupRepository, contactRepository } = await freshRepos();
+    const followup = makeFollowup();
+    await followupRepository.create(followup);
+    const conversationId = 'conv-forma-real-1';
+    await followupRepository.linkConversation(conversationId, followup.followupId);
+
+    // El webhook REAL de ElevenLabs no manda `metadata.call_sid` plano (eso es la forma del
+    // fixture/mock): para una llamada telefonica el SID de Twilio viaja en
+    // `metadata.phone_call.call_sid`, y el inicio en `start_time_unix_secs`. Antes de leer
+    // ambos, toda llamada real quedaba registrada con callSid y startedAt en null.
+    const startTimeUnix = 1_757_000_000;
+    const payload = payloadWithConversation(conversationId, {
+      metadata: {
+        call_duration_secs: 42,
+        start_time_unix_secs: startTimeUnix,
+        termination_reason: '',
+        phone_call: {
+          type: 'twilio',
+          call_sid: 'CAreal0001',
+          external_number: '+56900100141',
+          direction: 'outbound',
+        },
+      },
+    });
+    const rawBody = JSON.stringify(payload);
+    const signature = generateTestSignatureHeader(SECRET, rawBody);
+    const response = await handleElevenLabsPostCall(rawBody, signature, {
+      followupRepository,
+      contactRepository,
+      webhookSecret: SECRET,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const call = await followupRepository.getCall(followup.followupId, conversationId);
+    expect(call?.callSid).toBe('CAreal0001');
+    expect(call?.startedAt).toBe(new Date(startTimeUnix * 1000).toISOString());
+    expect(call?.durationSeconds).toBe(42);
   });
 });

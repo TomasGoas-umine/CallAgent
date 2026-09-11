@@ -25,6 +25,18 @@ function num(name: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/**
+ * Los unicos telefonos autorizados a sonar en la etapa de pruebas de llamadas reales.
+ *
+ * Es el default de la whitelist DURA (`TEST_PHONE_WHITELIST`) y tambien la lista que el Tablero
+ * Mock ofrece por OC — un solo literal para las dos cosas, para que el Mock no pueda ofrecer un
+ * numero que el guardrail despues rechace.
+ *
+ * Sigue siendo un cerrojo de etapa, no configuracion de operacion: agregar un numero aca es una
+ * decision explicita (ver CLAUDE.md, regla 0-bis).
+ */
+export const TELEFONOS_ETAPA_PRUEBAS = ['+56956194817', '+56955326503'] as const;
+
 export const env = {
   nodeEnv: str('NODE_ENV', 'local'),
   awsRegion: str('AWS_REGION', 'us-east-1'),
@@ -38,6 +50,7 @@ export const env = {
   mockProviders: bool('MOCK_PROVIDERS', true),
   elevenlabsApiKey: str('ELEVENLABS_API_KEY', ''),
   elevenlabsAgentId: str('ELEVENLABS_AGENT_ID', ''),
+  elevenlabsAgentBranchId: str('ELEVENLABS_AGENT_BRANCH_ID', ''),
   elevenlabsAgentPhoneNumberId: str('ELEVENLABS_AGENT_PHONE_NUMBER_ID', ''),
   elevenlabsWebhookSecret: str('ELEVENLABS_WEBHOOK_SECRET', ''),
 
@@ -70,6 +83,22 @@ export const env = {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
+
+  /**
+   * Whitelist dura de la etapa de pruebas de llamadas reales. El default son los unicos numeros
+   * autorizados a sonar; se sobreescribe solo en tests. Ver `services/guardrails.ts`.
+   */
+  testPhoneWhitelist: str('TEST_PHONE_WHITELIST', TELEFONOS_ETAPA_PRUEBAS.join(','))
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+
+  /**
+   * Enfriamiento entre disparos automaticos del Tablero Mock, POR OC. Es independiente del
+   * `COOLDOWN_HOURS` de contacto: las OCs del Mock comparten un punado de telefonos, asi que un
+   * cooldown por contacto bloquearia el tablero entero tras la primera llamada.
+   */
+  mockCallCooldownSeconds: num('MOCK_CALL_COOLDOWN_SECONDS', 300),
 
   retryBackoffSecondsOverride: process.env.RETRY_BACKOFF_SECONDS_OVERRIDE
     ? num('RETRY_BACKOFF_SECONDS_OVERRIDE', 0)

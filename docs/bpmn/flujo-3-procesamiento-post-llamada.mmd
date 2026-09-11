@@ -13,10 +13,14 @@ flowchart TD
     G2 -->|Sí| Reintento[/"⏰ Programar reintento<br/>en 24h → Flujo 2"/]
     G2 -->|No| Cerrar1["estado = AGOTADO"]
     G1 -->|Sí| Persist["Persistir CALL en DynamoDB<br/>+ transcripción a S3<br/>(si está autorizado)"]
-    Persist --> G3{"¿requiere_humano = true<br/>o criterio de<br/>escalamiento?"}
+    Persist --> DncPrev{"¿Pidió no volver<br/>a ser contactado?"}
+    DncPrev -->|Sí| BloqContacto["Marcar CONTACT<br/>do_not_call = true<br/>aunque también pida humano"]
+    DncPrev -->|No| G3
+    BloqContacto --> G3
+    G3{"¿requiere_humano = true<br/>o criterio de<br/>escalamiento?"}
     G3 -->|Sí| Esc["→ Flujo 4"]
     G3 -->|No| G4{"¿do_not_call<br/>solicitado?"}
-    G4 -->|Sí| Dnc["Marcar CONTACT<br/>do_not_call = true<br/>(permanente)"]
+    G4 -->|Sí| Dnc["Cerrar seguimiento<br/>contacto ya bloqueado"]
     G4 -->|No| G5{"¿Objetivo cumplido?<br/>evaluation_criteria"}
     G5 -->|Sí| Cerrar2["estado = RESUELTO<br/>+ compromiso registrado"]
     G5 -->|No| G6{"¿Se obtuvo información<br/>accionable?"}

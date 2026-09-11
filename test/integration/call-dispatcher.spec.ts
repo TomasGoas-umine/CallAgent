@@ -36,6 +36,7 @@ afterAll(async () => {
 beforeEach(() => {
   process.env = { ...ORIGINAL_ENV };
   process.env.ALLOWLIST_NUMBERS = DEMO_PHONE;
+  process.env.TEST_PHONE_WHITELIST = DEMO_PHONE;
   process.env.KILL_SWITCH = 'false';
   process.env.BUSINESS_HOURS_START = '09:00';
   process.env.BUSINESS_HOURS_END = '19:00';

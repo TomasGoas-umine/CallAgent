@@ -1,24 +1,121 @@
 /*
  * CSS plano, sin framework ni libreria de UI (requisito: componentes autocontenidos, listos
  * para embeberse en un core de Umine). Todo va prefijado con `uv-` para no colisionar con los
- * estilos del host.
+ * estilos del host — incluidas las custom properties, que viven en `:root` para que el shell
+ * (html/body) pueda pintar el mismo fondo que el micrositio.
+ *
+ * PALETA: la misma del micrositio de Cotizaciones de Umine — teal como acento (relleno de
+ * botones primarios, textos de enfasis, estado seleccionado), violeta como secundario
+ * (etiquetas de nivel/derivadas), superficies casi negras en oscuro y bordes de 1px.
+ *
+ * TEMA: lo decide el SISTEMA OPERATIVO (`prefers-color-scheme`). No hay toggle ni preferencia
+ * guardada a proposito: el micrositio se embebe en un core que ya tendra el suyo, y un toggle
+ * propio se desincronizaria del host. Reglas para mantenerlo sano:
+ *   - Ningun color se define SOLO dentro del `@media` oscuro: el tema claro es el default en
+ *     `:root` y el oscuro solo redefine tokens.
+ *   - Los componentes usan tokens, nunca hex directo (excepto los `color-mix`/rgba de apoyo).
  */
 
-.uv-root {
-  --uv-bg: #f7f8fa;
-  --uv-surface: #ffffff;
-  --uv-border: #e2e5ea;
-  --uv-text: #1c2230;
-  --uv-muted: #6b7280;
-  --uv-critico: #c0392b;
-  --uv-critico-bg: #fdecea;
-  --uv-alerta: #b26a00;
-  --uv-alerta-bg: #fff6e5;
-  --uv-normal: #1e7a45;
-  --uv-normal-bg: #e9f7ef;
-  --uv-accent: #1f4b99;
-  --uv-danger: #c0392b;
+:root {
+  color-scheme: light dark;
 
+  /* --- Tema claro (default) --- */
+  --uv-bg: #f4f7f7;
+  --uv-surface: #ffffff;
+  --uv-surface-2: #eff3f3;
+  --uv-thead: #e9eeee;
+  --uv-border: #dce3e3;
+  --uv-border-strong: #c3cccc;
+  --uv-text: #0d1516;
+  --uv-muted: #5d6a6c;
+
+  --uv-accent: #0f766e;
+  --uv-accent-hover: #0b5d57;
+  --uv-accent-on: #ffffff;
+  --uv-accent-text: #0b6f66;
+  --uv-accent-soft: #ddf1ee;
+  --uv-accent-ring: rgba(15, 118, 110, 0.25);
+
+  --uv-purple: #6d28d9;
+  --uv-purple-text: #5b21b6;
+  --uv-purple-soft: #f1ebff;
+  --uv-purple-border: #ddcdff;
+
+  --uv-critico: #b42318;
+  --uv-critico-bg: #fef3f2;
+  --uv-critico-border: #f8cdc7;
+  --uv-alerta: #b45309;
+  --uv-alerta-bg: #fffaeb;
+  --uv-alerta-border: #fbdfa6;
+  --uv-normal: #067647;
+  --uv-normal-bg: #ecfdf3;
+  --uv-normal-border: #b3e8cd;
+
+  --uv-danger: #b42318;
+  --uv-danger-hover: #911a11;
+  --uv-danger-on: #ffffff;
+
+  --uv-shadow: 0 1px 2px rgba(13, 21, 22, 0.06);
+  --uv-shadow-lg: 0 18px 44px rgba(13, 21, 22, 0.2);
+  --uv-backdrop: rgba(13, 21, 22, 0.45);
+
+  --uv-radius: 10px;
+  --uv-radius-sm: 7px;
+  --uv-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --uv-bg: #08090a;
+    --uv-surface: #0e1112;
+    --uv-surface-2: #16191b;
+    --uv-thead: #0a0c0d;
+    --uv-border: #23282a;
+    --uv-border-strong: #343b3d;
+    --uv-text: #e6ebeb;
+    --uv-muted: #8b9699;
+
+    --uv-accent: #14b8a6;
+    --uv-accent-hover: #2dd4bf;
+    --uv-accent-on: #032420;
+    --uv-accent-text: #2dd4bf;
+    --uv-accent-soft: rgba(20, 184, 166, 0.14);
+    --uv-accent-ring: rgba(45, 212, 191, 0.3);
+
+    --uv-purple: #7c3aed;
+    --uv-purple-text: #a78bfa;
+    --uv-purple-soft: rgba(124, 58, 237, 0.18);
+    --uv-purple-border: rgba(167, 139, 250, 0.35);
+
+    --uv-critico: #fb7185;
+    --uv-critico-bg: rgba(244, 63, 94, 0.12);
+    --uv-critico-border: rgba(251, 113, 133, 0.32);
+    --uv-alerta: #fbbf24;
+    --uv-alerta-bg: rgba(245, 158, 11, 0.12);
+    --uv-alerta-border: rgba(251, 191, 36, 0.3);
+    --uv-normal: #34d399;
+    --uv-normal-bg: rgba(16, 185, 129, 0.12);
+    --uv-normal-border: rgba(52, 211, 153, 0.3);
+
+    --uv-danger: #be123c;
+    --uv-danger-hover: #e11d48;
+    --uv-danger-on: #ffffff;
+
+    --uv-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --uv-shadow-lg: 0 20px 52px rgba(0, 0, 0, 0.65);
+    --uv-backdrop: rgba(3, 5, 6, 0.72);
+  }
+}
+
+/*
+ * Shell propio del micrositio (dev/standalone): `#umine-voice-root` es hijo directo del body.
+ * Embebido en el core de Umine el selector no matchea y el fondo lo sigue poniendo `.uv-root`.
+ */
+body > #umine-voice-root {
+  margin: 0;
+}
+
+.uv-root {
   box-sizing: border-box;
   font-family:
     system-ui,
@@ -27,10 +124,13 @@
     Roboto,
     sans-serif;
   font-size: 14px;
+  line-height: 1.45;
   color: var(--uv-text);
   background: var(--uv-bg);
-  min-height: 100%;
-  padding: 16px;
+  color-scheme: light dark;
+  min-height: 100vh;
+  padding: 20px;
+  -webkit-font-smoothing: antialiased;
 }
 
 .uv-root *,
@@ -39,70 +139,147 @@
   box-sizing: inherit;
 }
 
+/* --- Encabezado --- */
+.uv-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--uv-surface);
+  border: 1px solid var(--uv-border);
+  border-left: 3px solid var(--uv-accent);
+  border-radius: var(--uv-radius);
+  box-shadow: var(--uv-shadow);
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+
+.uv-header__icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--uv-radius-sm);
+  background: var(--uv-accent-soft);
+  color: var(--uv-accent-text);
+}
+
+.uv-header__titles {
+  min-width: 0;
+}
+
+.uv-header__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.uv-header__sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--uv-muted);
+}
+
 /* --- Banner permanente de modo --- */
 .uv-banner {
-  border-radius: 6px;
+  border-radius: var(--uv-radius-sm);
   padding: 10px 14px;
   margin-bottom: 14px;
   font-weight: 600;
   border: 1px solid transparent;
+  border-left-width: 3px;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 18px;
+  gap: 6px 16px;
   align-items: center;
 }
 
 .uv-banner--mock {
   background: var(--uv-normal-bg);
-  border-color: #b7e0c6;
+  border-color: var(--uv-normal-border);
+  border-left-color: var(--uv-normal);
   color: var(--uv-normal);
 }
 
 .uv-banner--real {
   background: var(--uv-critico-bg);
-  border-color: #f0b3ad;
+  border-color: var(--uv-critico-border);
+  border-left-color: var(--uv-critico);
   color: var(--uv-critico);
 }
 
 .uv-banner__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   font-weight: 400;
   font-size: 12px;
   color: var(--uv-muted);
 }
 
-/* --- Tabs --- */
+/* Chip de dato suelto (cuota, kill switch, modo del semaforo...). */
+.uv-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--uv-border);
+  background: var(--uv-surface);
+  color: var(--uv-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.uv-chip--alerta {
+  border-color: var(--uv-alerta-border);
+  background: var(--uv-alerta-bg);
+  color: var(--uv-alerta);
+  font-weight: 600;
+}
+
+/* --- Tabs (control segmentado) --- */
 .uv-tabs {
-  display: flex;
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 4px;
-  border-bottom: 1px solid var(--uv-border);
+  background: var(--uv-surface);
+  border: 1px solid var(--uv-border);
+  border-radius: var(--uv-radius);
+  padding: 4px;
   margin-bottom: 16px;
 }
 
 .uv-tab {
   background: none;
   border: 1px solid transparent;
-  border-bottom: none;
-  padding: 8px 16px;
+  padding: 7px 16px;
   font: inherit;
+  font-weight: 500;
   cursor: pointer;
   color: var(--uv-muted);
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--uv-radius-sm);
+}
+
+.uv-tab:hover {
+  color: var(--uv-text);
+  background: var(--uv-surface-2);
 }
 
 .uv-tab[aria-selected='true'] {
-  background: var(--uv-surface);
-  border-color: var(--uv-border);
-  color: var(--uv-text);
+  background: var(--uv-accent-soft);
+  border-color: var(--uv-accent-ring);
+  color: var(--uv-accent-text);
   font-weight: 600;
-  margin-bottom: -1px;
 }
 
 /* --- Paneles y tablas --- */
 .uv-panel {
   background: var(--uv-surface);
   border: 1px solid var(--uv-border);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--uv-radius);
+  box-shadow: var(--uv-shadow);
+  padding: 18px;
 }
 
 .uv-panel__header {
@@ -117,10 +294,14 @@
 .uv-panel__title {
   margin: 0;
   font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .uv-table-wrap {
   overflow-x: auto;
+  border: 1px solid var(--uv-border);
+  border-radius: var(--uv-radius-sm);
 }
 
 .uv-table {
@@ -132,39 +313,59 @@
 .uv-table th,
 .uv-table td {
   text-align: left;
-  padding: 8px 10px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--uv-border);
   vertical-align: top;
 }
 
-.uv-table th {
+.uv-table thead th {
+  background: var(--uv-thead);
   font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--uv-muted);
   white-space: nowrap;
 }
 
-.uv-table tbody tr:hover {
-  background: #fafbfc;
+.uv-table tbody tr:last-child > td {
+  border-bottom: none;
 }
 
-.uv-num {
+.uv-table tbody tr:hover {
+  background: var(--uv-surface-2);
+}
+
+/* Los selectores de celda tienen que ser tan especificos como `.uv-table td`, si no el
+   `text-align: left` de arriba gana y las columnas numericas quedan desalineadas. */
+.uv-num,
+.uv-table th.uv-num,
+.uv-table td.uv-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .uv-mono {
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: var(--uv-mono);
   font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+/* La OC es el identificador que el operador busca en la tabla: se destaca en teal como los
+   folios del micrositio de Cotizaciones. El resto del mono (telefonos, ids) queda neutro. */
+.uv-table td.uv-oc {
+  color: var(--uv-accent-text);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* --- Badges --- */
 .uv-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 2px 9px;
   border-radius: 999px;
+  border: 1px solid transparent;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -173,22 +374,35 @@
 
 .uv-badge--critico {
   background: var(--uv-critico-bg);
+  border-color: var(--uv-critico-border);
   color: var(--uv-critico);
 }
 
 .uv-badge--alerta {
   background: var(--uv-alerta-bg);
+  border-color: var(--uv-alerta-border);
   color: var(--uv-alerta);
 }
 
 .uv-badge--normal {
   background: var(--uv-normal-bg);
+  border-color: var(--uv-normal-border);
   color: var(--uv-normal);
 }
 
 .uv-badge--neutro {
-  background: #eef0f3;
+  background: var(--uv-surface-2);
+  border-color: var(--uv-border);
   color: var(--uv-muted);
+}
+
+/* Origen del followup (manual / evaluador): violeta, el secundario de la paleta. */
+.uv-badge--origen {
+  background: var(--uv-purple-soft);
+  border-color: var(--uv-purple-border);
+  color: var(--uv-purple-text);
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 /* --- Controles --- */
@@ -202,23 +416,25 @@
 .uv-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .uv-field__label {
+  display: block;
   font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--uv-muted);
 }
 
 .uv-select,
 .uv-button {
   font: inherit;
-  padding: 7px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--uv-border);
-  background: var(--uv-surface);
+  padding: 8px 12px;
+  border-radius: var(--uv-radius-sm);
+  border: 1px solid var(--uv-border-strong);
+  background: var(--uv-surface-2);
   color: var(--uv-text);
 }
 
@@ -227,36 +443,68 @@
   max-width: 520px;
 }
 
+.uv-select:focus-visible,
+.uv-button:focus-visible {
+  outline: none;
+  border-color: var(--uv-accent);
+  box-shadow: 0 0 0 3px var(--uv-accent-ring);
+}
+
 .uv-button {
   cursor: pointer;
+  font-weight: 500;
+}
+
+.uv-button:hover:not(:disabled) {
+  border-color: var(--uv-border-strong);
+  color: var(--uv-accent-text);
 }
 
 .uv-button--primary {
   background: var(--uv-accent);
   border-color: var(--uv-accent);
-  color: #fff;
+  color: var(--uv-accent-on);
   font-weight: 600;
+}
+
+.uv-button--primary:hover:not(:disabled) {
+  background: var(--uv-accent-hover);
+  border-color: var(--uv-accent-hover);
+  color: var(--uv-accent-on);
 }
 
 .uv-button--danger {
   background: var(--uv-danger);
   border-color: var(--uv-danger);
-  color: #fff;
+  color: var(--uv-danger-on);
   font-weight: 600;
 }
 
+.uv-button--danger:hover:not(:disabled) {
+  background: var(--uv-danger-hover);
+  border-color: var(--uv-danger-hover);
+  color: var(--uv-danger-on);
+}
+
+/* Deshabilitado tiene que seguir siendo LEGIBLE: el operador necesita leer que boton es el que
+   esta bloqueado para asociarlo con el motivo de abajo. */
 .uv-button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.6;
 }
 
 .uv-button--link {
   background: none;
   border: none;
-  color: var(--uv-accent);
+  color: var(--uv-accent-text);
   cursor: pointer;
   padding: 0;
   font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.uv-button--link:hover {
   text-decoration: underline;
 }
 
@@ -266,14 +514,21 @@
   color: var(--uv-muted);
 }
 
-.uv-blocked {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: var(--uv-critico-bg);
-  border: 1px solid #f0b3ad;
-  color: var(--uv-critico);
+.uv-blocked,
+.uv-ok {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-radius: var(--uv-radius-sm);
+  border: 1px solid transparent;
+  border-left-width: 3px;
   font-size: 13px;
+}
+
+.uv-blocked {
+  background: var(--uv-critico-bg);
+  border-color: var(--uv-critico-border);
+  border-left-color: var(--uv-critico);
+  color: var(--uv-critico);
 }
 
 .uv-blocked ul {
@@ -282,20 +537,27 @@
 }
 
 .uv-ok {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 6px;
   background: var(--uv-normal-bg);
-  border: 1px solid #b7e0c6;
+  border-color: var(--uv-normal-border);
+  border-left-color: var(--uv-normal);
   color: var(--uv-normal);
-  font-size: 13px;
+}
+
+.uv-root code {
+  font-family: var(--uv-mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--uv-surface-2);
+  border: 1px solid var(--uv-border);
+  color: var(--uv-accent-text);
 }
 
 /* --- Modal --- */
 .uv-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(20, 24, 33, 0.55);
+  background: var(--uv-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -305,17 +567,20 @@
 
 .uv-modal {
   background: var(--uv-surface);
-  border-radius: 10px;
+  border: 1px solid var(--uv-border);
+  border-radius: 12px;
   padding: 20px;
   width: min(560px, 100%);
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  color: var(--uv-text);
+  box-shadow: var(--uv-shadow-lg);
 }
 
 .uv-modal__title {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   font-size: 17px;
+  font-weight: 700;
 }
 
 .uv-modal__actions {
@@ -328,9 +593,9 @@
 .uv-kv {
   display: grid;
   grid-template-columns: minmax(120px, max-content) 1fr;
-  gap: 4px 12px;
+  gap: 6px 14px;
   font-size: 13px;
-  margin: 10px 0;
+  margin: 8px 0 14px;
 }
 
 .uv-kv__k {
@@ -338,28 +603,293 @@
 }
 
 .uv-detail {
-  background: #fafbfc;
+  background: var(--uv-surface-2);
   border-top: 1px solid var(--uv-border);
-  padding: 12px 16px;
+  padding: 14px 16px;
 }
 
 .uv-transcript {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin-top: 8px;
+  border-left: 2px solid var(--uv-border);
+  padding-left: 12px;
 }
 
 .uv-turn {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
 }
 
 .uv-turn__role {
   flex: 0 0 70px;
-  color: var(--uv-muted);
+  color: var(--uv-accent-text);
   font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.04em;
   padding-top: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Tablero Mock — edicion en la propia tabla y panel de configuracion de llamadas
+   --------------------------------------------------------------------------- */
+
+.uv-input {
+  font: inherit;
+  color: var(--uv-text);
+  background: var(--uv-surface);
+  border: 1px solid var(--uv-border-strong);
+  border-radius: 6px;
+  padding: 4px 6px;
+  max-width: 100%;
+}
+.uv-input:focus-visible,
+.uv-select:focus-visible {
+  outline: 2px solid var(--uv-accent-ring);
+  outline-offset: 1px;
+}
+.uv-input--num {
+  width: 5.5rem;
+  text-align: right;
+}
+.uv-input--date {
+  width: 9.5rem;
+}
+.uv-select--sm,
+.uv-button--sm {
+  font-size: 0.82rem;
+  padding: 4px 8px;
+}
+
+/* Fila con cambios sin guardar: se marca para que no se pierda de vista que hay un borrador. */
+.uv-row--sucia > td {
+  background: var(--uv-accent-soft);
+}
+
+.uv-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.uv-banner--info {
+  background: var(--uv-surface-2);
+  border: 1px solid var(--uv-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+.uv-banner--ok {
+  background: var(--uv-accent-soft);
+  border: 1px solid var(--uv-accent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+
+.uv-subpanel {
+  margin-top: 22px;
+  padding: 14px 16px;
+  background: var(--uv-surface-2);
+  border: 1px solid var(--uv-border);
+  border-radius: 10px;
+}
+
+.uv-table--compact th,
+.uv-table--compact td {
+  padding: 5px 8px;
+  font-size: 0.85rem;
+}
+
+.uv-history {
+  margin: 1.5rem 0 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--uv-border, #d8dee5);
+}
+.uv-history__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.uv-history__filters label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+.uv-history__filters input,
+.uv-history__filters select {
+  padding: 0.55rem;
+  border: 1px solid var(--uv-border, #aaa);
+  border-radius: 0.4rem;
+  color: inherit;
+  background: var(--uv-surface, transparent);
+}
+.uv-history__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.uv-history__stats > div {
+  padding: 1rem;
+  border: 1px solid var(--uv-border, #cbd5e1);
+  border-radius: 0.65rem;
+  display: grid;
+  gap: 0.4rem;
+}
+.uv-history__stats strong {
+  font-size: 1.7rem;
+}
+.uv-history__stats span {
+  font-size: 0.8rem;
+}
+.uv-history__detail {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--uv-border, #cbd5e1);
+  border-radius: 0.65rem;
+  overflow-wrap: anywhere;
+}
+.uv-history__detail details {
+  margin: 1rem 0;
+}
+.uv-history__detail summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.uv-history__detail audio {
+  display: block;
+  margin: 1rem 0;
+  max-width: 100%;
+}
+.uv-history__json {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 32rem;
+  overflow: auto;
+  font-size: 0.8rem;
+}
+.uv-history__transcript {
+  max-height: 30rem;
+  overflow: auto;
+  padding-left: 1.5rem;
+}
+
+/* --- Secciones colapsables del Tablero Mock (A/B/C del Semaforo) ---------------
+   `<details>` nativo: el estado abierto/cerrado lo maneja el navegador, no React.
+   El marcador por defecto se reemplaza por uno propio para que el titulo quede
+   alineado con el resto de los encabezados del panel. */
+.uv-seccion {
+  margin-top: 18px;
+  border: 1px solid var(--uv-border);
+  border-radius: 10px;
+  background: var(--uv-surface);
+}
+.uv-seccion > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 10px;
+}
+.uv-seccion > summary::-webkit-details-marker {
+  display: none;
+}
+.uv-seccion > summary::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 0.7rem;
+  color: var(--uv-muted);
+}
+.uv-seccion[open] > summary::before {
+  content: '▼';
+}
+.uv-seccion[open] > summary {
+  border-bottom: 1px solid var(--uv-border);
+  border-radius: 10px 10px 0 0;
+}
+.uv-seccion > summary:hover {
+  background: var(--uv-surface-2);
+}
+.uv-seccion > p,
+.uv-seccion > .uv-table-wrap {
+  margin: 10px 14px;
+}
+
+/* --- Secciones colapsables del Tablero Original (A / B / C del Semaforo) ---
+   Cada seccion es una vineta: encabezado siempre visible con el contador de OCs, y la tabla
+   debajo solo cuando esta abierta. El encabezado es un <button> de verdad (no un div con
+   onClick) para que teclado y lectores de pantalla lo anuncien con su `aria-expanded`. */
+.uv-seccion {
+  margin-top: 14px;
+  border: 1px solid var(--uv-border);
+  border-radius: var(--uv-radius-sm);
+  overflow: hidden;
+}
+
+.uv-seccion__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: var(--uv-surface-2);
+  color: var(--uv-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.uv-seccion__header:hover {
+  background: var(--uv-thead);
+}
+
+.uv-seccion__header:focus-visible {
+  outline: 2px solid var(--uv-accent);
+  outline-offset: -2px;
+}
+
+.uv-seccion__caret {
+  font-size: 10px;
+  color: var(--uv-muted);
+}
+
+.uv-seccion__titulo {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.uv-seccion__contador {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--uv-accent-text);
+  background: var(--uv-accent-soft);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+
+/* El criterio de la seccion viaja en el encabezado a proposito: las tres escalas son distintas
+   y un CRITICO de una no equivale al de otra. Se empuja a la derecha cuando hay lugar. */
+.uv-seccion__criterio {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--uv-muted);
+}
+
+.uv-seccion__cuerpo {
+  padding: 12px;
+  background: var(--uv-surface);
+}
+
+/* Adentro de la seccion el borde ya lo pone la vineta. */
+.uv-seccion__cuerpo .uv-table-wrap {
+  border: none;
 }

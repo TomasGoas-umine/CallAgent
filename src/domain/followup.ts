@@ -52,7 +52,7 @@ export interface Followup {
     orderNumber: string;
     initCourse: string;
     endCourse: string;
-    nivelDetectado: 'CRITICO';
+    nivelDetectado: 'CRITICO' | 'ALERTA' | 'NORMAL';
     seccion: 'A_RIESGO_CONEXION';
   };
 }
@@ -77,6 +77,27 @@ export interface FollowupCall {
   transcriptSummary?: string | null;
   /** Resultado ya clasificado por `call-outcome-classifier` (taxonomia unica). */
   outcome?: string;
+  /**
+   * `data_collection_results` crudo de ElevenLabs, con el `rationale` de cada campo (por que
+   * el modelo extrajo ese valor). `dataCollection` de arriba guarda solo los valores de los
+   * cinco campos tipados, que es lo que consume el clasificador; el rationale es la evidencia
+   * que necesita un humano para auditar una clasificacion dudosa, y se perdia.
+   */
+  dataCollectionDetail?: Record<string, { value?: unknown; rationale?: string }>;
+  /** Costo en creditos que reporta ElevenLabs (`metadata.cost`). */
+  cost?: number | null;
+  /**
+   * Por que termino la llamada, en palabras del proveedor ("Call ended by remote party",
+   * "This request exceeds your quota limit."...). Es la evidencia con la que hay que calibrar
+   * la deteccion de no contestadas (UV-053) — sin persistirla no hay con que calibrar.
+   */
+  terminationReason?: string | null;
+  /**
+   * Como llego este resultado: `webhook` (ElevenLabs lo entrego) o `sync` (lo fue a buscar
+   * `conversation-sync` contra la API). Importa para depurar: si todo dice `sync`, el webhook
+   * no esta entregando.
+   */
+  fuente?: 'webhook' | 'sync';
 }
 
 /** Todos los estados posibles — usado para listar followups sin depender de un `scan`. */

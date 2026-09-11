@@ -6,7 +6,7 @@
  * Todos los parametros vienen de env vars (prompt §9): nunca constantes fijas en el codigo.
  */
 
-import { env } from '../utils/env.js';
+import { env, TELEFONOS_ETAPA_PRUEBAS } from '../utils/env.js';
 
 export interface GuardrailContext {
   now?: Date;
@@ -20,7 +20,44 @@ export interface GuardrailResult {
     | 'fuera_de_ventana_horaria'
     | 'cuota_diaria_alcanzada'
     | 'no_en_allowlist'
+    | 'fuera_de_whitelist_pruebas'
     | 'do_not_call';
+}
+
+/**
+ * Numeros de pruebas de esta etapa. Cada OC del Tablero Mock usa UNO de estos (se elige por OC),
+ * y la whitelist de abajo rechaza cualquier otro antes de que se origine una llamada.
+ */
+export const MOCK_TEST_PHONES = TELEFONOS_ETAPA_PRUEBAS;
+
+/** Numero por defecto de una OC recien sembrada. */
+export const MOCK_TEST_PHONE: string = MOCK_TEST_PHONES[0];
+
+/** Si el Mock puede asignar este numero a una OC. No sustituye al guardrail: lo adelanta. */
+export function esTelefonoDelMock(phone: string): boolean {
+  return (MOCK_TEST_PHONES as readonly string[]).includes(phone);
+}
+
+/**
+ * Whitelist DURA de pruebas — segunda barrera, independiente de `ALLOWLIST_NUMBERS`.
+ *
+ * Por que dos listas y no una: `ALLOWLIST_NUMBERS` es configuracion de operacion y cambia
+ * seguido (el operador agrega su propio numero para probar). Esta whitelist es un cerrojo de
+ * etapa: mientras el sistema este en pruebas de llamadas reales, ningun numero fuera de ella
+ * debe sonar, por mas que alguien lo agregue a la allowlist o lo escriba a mano en el
+ * disparador. Se evalua DESPUES de la allowlist para no cambiar el motivo de rechazo de los
+ * numeros que ya estaban fuera de la allowlist.
+ *
+ * `TEST_PHONE_WHITELIST` existe para que la suite de tests pueda usar sus propios numeros; el
+ * default —lo que corre si nadie la setea— son unicamente los numeros de pruebas
+ * (`TELEFONOS_ETAPA_PRUEBAS`).
+ */
+export function testPhoneWhitelist(): string[] {
+  return env.testPhoneWhitelist;
+}
+
+export function isPhoneInTestWhitelist(phone: string): boolean {
+  return env.testPhoneWhitelist.includes(phone);
 }
 
 /** Kill switch — en AWS real seria un parametro SSM; en local, KILL_SWITCH=true/false. */
@@ -81,6 +118,9 @@ export function runGuardrails(phone: string, ctx: GuardrailContext = {}): Guardr
   if (!isWithinBusinessHours(ctx.now))
     return { allowed: false, motivo: 'fuera_de_ventana_horaria' };
   if (!isNumberAllowed(phone)) return { allowed: false, motivo: 'no_en_allowlist' };
+  if (!isPhoneInTestWhitelist(phone)) {
+    return { allowed: false, motivo: 'fuera_de_whitelist_pruebas' };
+  }
   if (ctx.dailyCountSoFar !== undefined && isDailyQuotaExceeded(ctx.dailyCountSoFar)) {
     return { allowed: false, motivo: 'cuota_diaria_alcanzada' };
   }

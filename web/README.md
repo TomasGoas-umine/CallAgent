@@ -24,19 +24,109 @@ npm run dev        # http://localhost:5173
 En desarrollo Vite proxea `/api` a `http://localhost:3000` (configurable con
 `UMINE_VOICE_API_TARGET`), asi que el front siempre llama a rutas relativas y no hace falta CORS.
 
+> ⚠️ **Vite recarga solo; el server de la raiz NO.** Si cambiaste algo en `../src` y las tablas
+> aparecen vacias, el server del `:3000` quedo con codigo viejo: paralo y volve a correr
+> `npm run local:server`. El cliente HTTP detecta ese caso y lo dice explicitamente en vez de
+> mostrar "Not Found" (ver `src/api.ts` y `test/api.spec.ts`).
+
 ```bash
 npm run build      # tsc --noEmit + vite build -> dist/
 npm run typecheck
 npm test           # vitest (jsdom)
 ```
 
-## Las tres vistas
+## Las cuatro vistas
 
-| Vista          | Que muestra                                                                                                                                                                                |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Tablero**    | Los cursos del Semaforo con urgencia, cliente, curso, OC, semana, % de conexion, dias restantes, contacto y telefono **enmascarado**. Filtro por urgencia.                                 |
-| **Dashboard**  | Los followups con estado, origen, duracion, resultado clasificado y campos extraidos. Fila expandible (pide el detalle al abrirse) con la transcripcion completa. Refresco solo con boton. |
-| **Disparador** | Elegir un curso CRITICO + un numero de la allowlist, ver el modal de confirmacion y disparar UNA llamada.                                                                                  |
+| Vista                | Que muestra                                                                                                                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Tablero Mock**     | OCs simuladas y **editables** en la propia tabla, en las TRES secciones del Semaforo (A Riesgo Conexion, B Riesgo DJ, C Rectificacion) como vinetas colapsables. Al guardar, el backend recalcula las tres. **Solo la seccion A puede originar una llamada REAL.** |
+| **Tablero Original** | El dato real de `tablero-api`, **estrictamente de lectura**: las TRES secciones del Semaforo (A Riesgo Conexion, B Riesgo DJ, C Rectificacion) en vinetas colapsables. No crea candidatos, ni seguimientos, ni llamadas.                                           |
+| **Dashboard**        | Los followups con estado, origen, duracion, resultado clasificado y campos extraidos. Fila expandible con la transcripcion. Refresco solo con boton.                                                                                                               |
+| **Disparador**       | Elegir un curso CRITICO + un numero de la allowlist, ver el modal de confirmacion y disparar UNA llamada.                                                                                                                                                          |
+
+**Solo el Tablero Mock y el Disparador pueden llamar.** El Tablero Original no tiene ningun boton
+de disparo y no debe tenerlo; hay un test que lo verifica.
+
+### Tablero Mock — decisiones deliberadas
+
+- **El guardado es explicito, por fila.** No se guarda al teclear: una edicion puede originar una
+  llamada telefonica real, asi que tiene que ser un acto deliberado. La fila con cambios sin
+  guardar queda resaltada.
+- **Solo se editan los campos que el Semaforo real usa para la criticidad**, y cada seccion edita
+  los de SU criterio (ver la tabla de abajo). Ni montos, ni RUT, ni OTIC: no intervienen en
+  ninguna de las tres. La lista de estados del desplegable la manda el backend, no esta
+  hardcodeada aca.
+- **Las tres secciones son tres vistas del MISMO juego de OCs**, no tres listas distintas: la
+  misma OC se evalua por los tres criterios a la vez, igual que en el Semaforo real. Puede estar
+  en dos secciones al mismo tiempo, o en ninguna. Cada tabla muestra todas las OCs, con las de su
+  seccion primero y, para el resto, el motivo por el que quedan fuera — es un editor, y hace
+  falta poder agarrar una OC cualquiera y llevarla a la seccion que se quiere probar.
+- **El interruptor de llamadas automaticas arranca apagado** y encenderlo no llama por si solo:
+  hace falta guardar una edicion que produzca la transicion.
+- **El panel de configuracion al pie siempre esta visible**, con el umbral activo por semana, el
+  valor original del Semaforo, cuales estan modificados y un boton para restaurar. Se editan en
+  un modal. Esos umbrales deciden **cuando se llama**, no la criticidad que muestra el tablero.
+- **Los telefonos de terceros van enmascarados.** La unica excepcion es la whitelist de pruebas
+  que se muestra completa al pie: es el numero del propio operador, misma regla que ya aplica la
+  allowlist en `GET /api/health`.
+
+#### Que edita cada seccion, y cual llama
+
+| Seccion                 | Campos editables ahi                                                                       | Columna «¿Llama?» |
+| ----------------------- | ------------------------------------------------------------------------------------------ | ----------------- |
+| **A · Riesgo Conexion** | estado, inicio, termino, inscritos, conexiones, contacto/empresa/curso y telefono de la OC | **si** — la unica |
+| **B · Riesgo DJ**       | termino del curso, conectados, con DJ                                                      | no existe         |
+| **C · Rectificacion**   | estado de la OC, ultima actualizacion                                                      | no existe         |
+
+Las secciones B y C **no tienen forma de llamar**: no es que el boton este escondido, es que la
+decision de llamar la arma el backend unicamente desde la seccion A (`mock-tablero-store` calcula
+`regla` con el nivel de conexion y nada mas). Bajar todos los umbrales de llamada al maximo
+tampoco las habilita — no existe un umbral de DJ ni de rectificacion que tocar. Hay tests de
+integracion que lo verifican con las llamadas automaticas ENCENDIDAS (ADR-011).
+
+La seccion A arranca abierta y las otras dos cerradas: entrar al tablero no puede significar tres
+tablas largas de golpe.
+
+### Tablero Original — las tres secciones del Semaforo
+
+Cada seccion es una **vineta colapsable** con su contador de OCs, igual que en el micrositio
+original. Las tres tienen su propia escala y **no se comparan entre si**:
+
+| Seccion                 | Criterio                                                  | Escala                      |
+| ----------------------- | --------------------------------------------------------- | --------------------------- |
+| **A · Riesgo Conexion** | % de conexion contra lo esperado para la semana del curso | umbrales por semana (S1-S4) |
+| **B · Riesgo DJ**       | dias que lleva el curso cerrado sin Declaracion Jurada    | >3d ALERTA, >7d CRITICO     |
+| **C · Rectificacion**   | dias que lleva la OC esperando la OC Final del OTIC       | >15d ALERTA, >30d CRITICO   |
+
+Las tres salen de **una sola** lectura de `tablero-api` (`readSemaforoSecciones`) y llegan ya
+filtradas y clasificadas por el backend: este directorio solo filtra por nivel, ordena y pinta.
+El filtro "Filtro por urgencia" se aplica a las tres a la vez; `Como el Semaforo` significa "lo
+que el Semaforo real muestra en cada seccion" (en A eso esconde los NORMAL; en B y C no hay nada
+extra que esconder porque el gate ya lo hizo del lado del backend).
+
+**Ninguna de las tres puede llamar aca**, y B y C no pueden llamar en ningun lado: una DJ que
+falta o una OC Final que no llega se resuelven con el OTIC, no con el alumno (ADR-011).
+
+### Tablero Original — carga bajo demanda + cache
+
+Leer `tablero-api` de verdad son ~6.000 registros paginados y tarda ~22 s. Por eso:
+
+- **No se carga al montar la app**: se lee la primera vez que se abre esa pestana. El resto del
+  micrositio no espera por eso.
+- **El backend cachea la lectura 5 minutos** (`ORIGINAL_CACHE_TTL_MS`), asi que volver a la
+  pestana es instantaneo. El dato de fondo solo cambia cada 30 min (cron del SENCE Sync), asi que
+  la cache no puede mostrar nada mas viejo de lo que ya estaria sin ella. El boton **Recargar**
+  manda `?refresh=1` y fuerza una lectura fresca.
+- **Entrar a la pestana limpia el error anterior** y reintenta. Sin eso, un fallo en la primera
+  visita (tipico: el server local con codigo viejo) dejaba la pestana en blanco para siempre
+  hasta recargar la pagina entera.
+
+### La regla que no se puede romper
+
+`web/` **no clasifica nada**. No hay umbrales, ni semanas de curso, ni estados del Semaforo
+hardcodeados en este directorio: todo llega calculado desde el backend.
+`test/sin-logica-semaforo.spec.ts` falla si alguien copia esa logica aca. Ver
+`docs/SEMAFORO_INTEGRACION.md` §8-bis en la raiz del repo.
 
 ## Decisiones que no se deben deshacer sin pensarlo
 
@@ -80,3 +170,22 @@ npm test           # vitest (jsdom)
 cuota agotada, allowlist vacia, formato de telefono invalido, numero fuera de allowlist, curso no
 CRITICO, fuera de ventana horaria). Es **solo UX**: el backend vuelve a evaluar todo y es el que
 manda (403 / 429 / 503). Nunca se origina una llamada sin pasar por `POST /api/calls`.
+
+## Paleta y tema (claro/oscuro)
+
+Los colores son los del micrositio de **Cotizaciones** de Umine: teal como acento (botones
+primarios, textos de enfasis, tab/opcion seleccionada, folios y OC), violeta como secundario
+(origen del followup), superficies casi negras en oscuro, bordes de 1px y radios de 7–10px.
+
+Todo vive en `src/styles.css` como **custom properties prefijadas** (`--uv-*`) declaradas en
+`:root`, y los componentes solo consumen tokens — nunca hex directo. Reglas para no romperlo:
+
+- **El tema lo decide el sistema operativo** (`@media (prefers-color-scheme: dark)`). No hay
+  toggle ni preferencia guardada **a proposito**: el micrositio se embebe en un core de Umine que
+  ya tendra el suyo, y un switch propio se desincronizaria del host. `index.html` declara
+  `<meta name="color-scheme" content="light dark">` para que los controles nativos y los
+  scrollbars sigan la misma preferencia.
+- **El tema claro es el default en `:root`; el oscuro solo redefine tokens.** Ningun color se
+  define unicamente dentro del `@media` — si no, el tema claro se queda sin ese valor.
+- Los selectores de celda de tabla necesitan la misma especificidad que `.uv-table td`
+  (`.uv-table td.uv-num`), si no el `text-align: left` base gana.

@@ -15,10 +15,13 @@ export function Banner({ health }: { health: Health | null }) {
   }
 
   const mock = health.mockProviders;
-  // Llamar de verdad sin webhook post-call configurado es un estado valido pero confuso: la
-  // llamada suena, pero el dashboard nunca muestra el resultado. Se avisa explicitamente para
-  // que no parezca que el sistema se rompio.
-  const sinWebhook = !mock && !health.webhookPostCall.configurado;
+  // Llamar de verdad sin webhook post-call es un estado valido pero confuso: la llamada suena y
+  // el resultado no llega solo. Ya no es irrecuperable — el boton Sincronizar del Dashboard lo
+  // trae desde la API — pero conviene avisarlo para que no parezca que el sistema se rompio.
+  const sinWebhook =
+    !mock &&
+    (!health.webhookPostCall.urlConfigurada ||
+      health.webhookPostCall.registroConfigurado === false);
   return (
     <div className={`uv-banner ${mock ? 'uv-banner--mock' : 'uv-banner--real'}`}>
       <span>
@@ -28,15 +31,25 @@ export function Banner({ health }: { health: Health | null }) {
       </span>
       {sinWebhook ? (
         <span>
-          Webhook post-call SIN configurar: la llamada va a sonar, pero el resultado no vuelve y el
-          followup queda en DIALING.
+          Webhook post-call SIN configurar: el resultado no va a llegar solo. Traelo con Sincronizar
+          en el Dashboard (lee la API de ElevenLabs, no origina llamadas).
         </span>
       ) : null}
+      {/* Cada dato va en su propio chip (mismo patron que la barra de filtros de Cotizaciones),
+          pero el TEXTO de cada uno se mantiene completo dentro del chip: es lo que los tests
+          buscan (`disparo automatico off (manual)`). */}
       <span className="uv-banner__meta">
-        cuota {health.cuota.usados}/{health.cuota.limite} hoy ({health.cuota.dateKey}) · kill switch{' '}
-        {health.killSwitch ? 'ACTIVO' : 'off'} · DRY_RUN {String(health.dryRun)} · semaforo{' '}
-        {health.tableroApiMode} · disparo automatico{' '}
-        {health.disparoAutomatico ? 'ON' : 'off (manual)'}
+        <span className="uv-chip">
+          cuota {health.cuota.usados}/{health.cuota.limite} hoy ({health.cuota.dateKey})
+        </span>
+        <span className={`uv-chip${health.killSwitch ? ' uv-chip--alerta' : ''}`}>
+          kill switch {health.killSwitch ? 'ACTIVO' : 'off'}
+        </span>
+        <span className="uv-chip">DRY_RUN {String(health.dryRun)}</span>
+        <span className="uv-chip">semaforo {health.tableroApiMode}</span>
+        <span className={`uv-chip${health.disparoAutomatico ? ' uv-chip--alerta' : ''}`}>
+          disparo automatico {health.disparoAutomatico ? 'ON' : 'off (manual)'}
+        </span>
       </span>
     </div>
   );

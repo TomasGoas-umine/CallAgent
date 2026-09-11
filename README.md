@@ -111,29 +111,71 @@ Importante: **la llamada la origina ElevenLabs, no este backend.** Nosotros solo
 de Twilio que importan son las que le diste a ElevenLabs; las de nuestro `.env` solo se usan
 para validar la firma del webhook de status de Twilio, que es opcional.
 
-### 2. Una URL publica para el webhook post-call
+### 2. Que el resultado de la llamada vuelva al proyecto
 
-Sin esto **la llamada ocurre pero el resultado nunca vuelve**: el FOLLOWUP se queda en `DIALING`
-para siempre, sin transcripcion ni clasificacion. El server corre en localhost, asi que hace
-falta un tunel:
+Hay dos caminos, y **el que conviene tener andando primero es el segundo**.
+
+#### 2a. Sincronizacion por API (recomendado — no depende de nada mas que la API key)
 
 ```bash
-# opcion A: cloudflared (gratis, sin cuenta)
-cloudflared tunnel --url http://localhost:3000
-# opcion B: ngrok
-ngrok http 3000
+npm run calls:sync
 ```
 
-Copia la URL `https://...` que te devuelve a `PUBLIC_BASE_URL` en el `.env`, y registrala en
-ElevenLabs (Settings -> Webhooks, post-call):
+Va a buscar a la API de ElevenLabs el resultado de las llamadas que ya terminaron y lo registra
+en la base local: transcripcion, resumen, campos extraidos, criterios de evaluacion, `call_sid`,
+duracion, costo y motivo de corte. Tambien esta el boton **Sincronizar** del Dashboard
+(`POST /api/calls/sync`).
 
-```
-https://<tu-tunel>/webhooks/elevenlabs/post-call
+Solo hace `GET` contra ElevenLabs: **no origina ninguna llamada**, no gasta minutos y es
+idempotente — se puede correr las veces que haga falta. No necesita URL publica, ni tunel, ni
+webhook registrado, ni secreto.
+
+Para saber a que seguimiento pertenece cada conversacion usa, en este orden, el enlace local que
+escribe el dispatcher y el `followup_id` que viaja dentro de la conversacion en ElevenLabs. Lo
+que no puede atribuir con certeza **no lo toca**: lo reporta como no atribuible. Si sabes a que
+seguimiento corresponde una conversacion vieja, atribuila vos:
+
+```bash
+npm run calls:sync -- --conversation-id=conv_xxx --followup-id=<uuid>
 ```
 
-ElevenLabs te muestra **una sola vez** el secreto de firma al crear el webhook: ese valor va en
-`ELEVENLABS_WEBHOOK_SECRET`. El backend rechaza con 401 cualquier webhook cuya firma HMAC no
-cuadre, asi que si el secreto esta mal no vas a ver el resultado de la llamada.
+> Las conversaciones que no origino este proyecto (pruebas hechas desde el panel de ElevenLabs)
+> siempre van a aparecer como no atribuibles. Es correcto: no traen ninguna referencia a una OC.
+
+#### 2b. Webhook post-call (tiempo real — el camino de produccion)
+
+Con el webhook, el resultado entra solo apenas termina la llamada, sin apretar nada. A cambio
+depende de tres cosas encadenadas: una URL publica **viva**, un webhook registrado apuntando a
+**esa** URL, y el secreto correcto. En local, con un quick tunnel, las tres se invalidan cada
+vez que reinicias el tunel — por eso conviene tenerlo como mejora, no como base.
+
+```bash
+npm run tunnel:up
+```
+
+Levanta un quick tunnel de cloudflared (gratis, sin cuenta), escribe `PUBLIC_BASE_URL` en tu
+`.env` y te imprime la URL exacta a registrar. Dejalo corriendo. Despues, en ElevenLabs
+(**Settings -> Webhooks -> Create webhook**):
+
+- **URL**: `https://<tu-tunel>/webhooks/elevenlabs/post-call`
+- **Auth type**: `HMAC` — el handler no valida ningun otro metodo.
+- El **secreto** que ElevenLabs muestra **una sola vez** va en `ELEVENLABS_WEBHOOK_SECRET`.
+  Si no cuadra, el backend responde 401 y el resultado de esa llamada no entra por este camino
+  (lo podes recuperar igual con `npm run calls:sync`).
+- Activalo como **post-call webhook** en **Agents Platform -> Settings**. Crear el webhook no
+  alcanza: si no queda asignado ahi, ElevenLabs no le entrega nada. Un agente puede tener su
+  propio override, que gana sobre la config del workspace.
+
+Y verifica el circuito **sin gastar un minuto de llamada**:
+
+```bash
+npm run webhook:selftest    # firma valida -> 200, firma invalida -> 401
+npm run providers:check     # §5: que el webhook exista, este activo, sea HMAC y este asignado
+```
+
+`GET /api/health` informa `webhookPostCall.urlConfigurada`, que dice solo que hay una
+`PUBLIC_BASE_URL` en el `.env` — **no** que la URL resuelva ni que el webhook exista. Eso lo
+comprueban los dos comandos de arriba.
 
 ### 3. Validar TODO antes de gastar un minuto
 
@@ -171,6 +213,15 @@ y `KILL_SWITCH=true` corta todo al instante.
   volvela a `09:00-19:00` antes de llamar a alguien que no seas vos.
 - **`CALL_RECORDING_ENABLED`**: default `false` (UV-026, decision de negocio abierta). Se manda
   explicito en cada request, no se hereda de la config del agente.
+- **Un followup colgado en `DIALING` casi nunca es un bug**: es que el resultado no volvio.
+  Corre `npm run calls:sync` — si la llamada existio, lo trae. Si aparece como no atribuible,
+  la conversacion no la origino este proyecto.
+- **"No contestaron" todavia no se clasifica bien (UV-053)**: el `data.status` del webhook real
+  solo toma `initiated`/`in-progress`/`processing`/`done`/`failed` — nunca `no-answer` ni `busy`,
+  que es lo que espera el clasificador. Una llamada que nadie atiende termina hoy como
+  `contacted`/`unknown` -> `CERRADO`, marcando el contacto como contactado y sin reprogramar el
+  reintento. Hay que calibrarlo con payloads reales (`metadata.termination_reason` es la pista);
+  `webhook:selftest -- --conversation-id=<id>` permite reproducirlos sin volver a llamar.
 - **`DRY_RUN`** solo afecta al evaluador en lote, **no** al disparador manual: no te protege de
   una llamada real disparada desde el micrositio. El que te protege es `MOCK_PROVIDERS`.
 
@@ -189,3 +240,14 @@ npm run web:test       # 20 tests del front (vitest + jsdom)
 No se realizan llamadas reales a Twilio/ElevenLabs en ningun test, ni en el demo, ni desde el
 micrositio en modo local — todo corre contra `MockElevenLabsClient` (`MOCK_PROVIDERS=true` es
 el default). Ver `CLAUDE.md`, seccion "Reglas de seguridad".
+
+### Historial completo del agente y webhook local
+
+El Dashboard incluye el **Historial del agente**, con llamadas y pruebas de ElevenLabs aunque no tengan OC, filtros, estadísticas, transcripciones, registros descargables y audio cuando existe. **Importar historial de ElevenLabs** recupera conversaciones anteriores sin llamar a nadie.
+
+`npm run webhook:connect` abre un túnel exclusivo para el webhook y configura su registro HMAC y asignación al agente. Requiere permiso `webhooks_write`; al finalizar, reinicia el servidor local para cargar el secreto. Con el túnel abierto también puedes ejecutar `npm run webhook:configure`. Ver [operación, validación y límites del historial](docs/architecture/CALL-HISTORY.md).
+
+### Pruebas manuales del agente
+
+Consulta [la guía de casos y variables del Tablero Mock](docs/PRUEBAS_MANUALES_AGENTE.md).
+`npm run agent:check` verifica el contrato con el agente activo sin originar llamadas.

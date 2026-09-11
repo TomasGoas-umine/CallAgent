@@ -2,6 +2,10 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import {
   getCourseWeek,
   clasificarConexion,
+  clasificarDj,
+  clasificarRectificacion,
+  DJ_THRESHOLDS,
+  RECTIFICACION_THRESHOLDS,
   WEEK_THRESHOLDS,
 } from '../../src/services/urgency-classifier.js';
 
@@ -90,5 +94,61 @@ describe('clasificarConexion — umbrales exactos de la hoja de ruta', () => {
   it('cae a la semana 4 (fallback) para valores de semana fuera de rango', () => {
     // @ts-expect-error — probar el fallback `?? WEEK_THRESHOLDS[4]` deliberadamente con valor invalido
     expect(clasificarConexion(5, 99)).toBe('NORMAL');
+  });
+});
+
+/**
+ * Seccion B - Riesgo DJ (`criticidadDj`, `StatusCursosPage.tsx:83-87`). Escala en DIAS desde el
+ * cierre del curso: nada que ver con la semana de curso ni con el porcentaje de conexion.
+ */
+describe('clasificarDj', () => {
+  it('usa los cortes del Semaforo: >7 dias CRITICO, >3 dias ALERTA', () => {
+    expect(DJ_THRESHOLDS.criticoDias).toBe(7);
+    expect(DJ_THRESHOLDS.alertaDias).toBe(3);
+  });
+
+  it('clasifica por dias desde el cierre, con los bordes del original', () => {
+    expect(clasificarDj(8)).toBe('CRITICO');
+    // 7 exactos NO es critico: el Semaforo compara `> 7`.
+    expect(clasificarDj(7)).toBe('ALERTA');
+    expect(clasificarDj(4)).toBe('ALERTA');
+    // 3 exactos NO es alerta: el Semaforo compara `> 3` ("PENDIENTE" alla, NORMAL aca).
+    expect(clasificarDj(3)).toBe('NORMAL');
+    expect(clasificarDj(0)).toBe('NORMAL');
+  });
+
+  it('un curso que todavia no cerro (dias negativos) no es un riesgo de DJ', () => {
+    expect(clasificarDj(-10)).toBe('NORMAL');
+  });
+});
+
+/**
+ * Seccion C - Rectificacion. Tercera escala, tambien en dias: los cortes estan en el color de la
+ * celda "Dias Pendiente" del original (`StatusCursosPage.tsx:1245`, `>30` rojo / `>15` amarillo).
+ */
+describe('clasificarRectificacion', () => {
+  it('usa los cortes del Semaforo: >30 dias CRITICO, >15 dias ALERTA', () => {
+    expect(RECTIFICACION_THRESHOLDS.criticoDias).toBe(30);
+    expect(RECTIFICACION_THRESHOLDS.alertaDias).toBe(15);
+  });
+
+  it('clasifica por dias esperando al OTIC, con los bordes del original', () => {
+    expect(clasificarRectificacion(31)).toBe('CRITICO');
+    expect(clasificarRectificacion(30)).toBe('ALERTA');
+    expect(clasificarRectificacion(16)).toBe('ALERTA');
+    expect(clasificarRectificacion(15)).toBe('NORMAL');
+    expect(clasificarRectificacion(0)).toBe('NORMAL');
+  });
+});
+
+/**
+ * La guarda que justifica que las tres escalas vivan en el mismo archivo: son INDEPENDIENTES.
+ * Mezclarlas (clasificar una DJ con los umbrales de conexion, por ejemplo) da otro resultado.
+ */
+describe('las tres escalas no se pisan', () => {
+  it('el mismo numero cae en niveles distintos segun que seccion lo pregunte', () => {
+    expect(clasificarConexion(3, 20)).toBe('CRITICO');
+    expect(clasificarDj(20)).toBe('CRITICO');
+    expect(clasificarRectificacion(20)).toBe('ALERTA');
   });
 });

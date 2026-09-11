@@ -14,7 +14,14 @@ export type UrgencyLevel = 'NORMAL' | 'ALERTA' | 'CRITICO';
 
 export type CourseWeek = 1 | 2 | 3 | 4;
 
-/** Registro tal como lo entrega (o entregaria) GET /tablero/search — por alumno, no agregado. */
+/**
+ * Registro tal como lo entrega `GET /tablero/search` — por ALUMNO, no agregado.
+ *
+ * Los nombres salen del contrato real verificado contra prod (2026-09-09, ver
+ * `test/fixtures/tablero_search_real_anonymized.json`). NO existe `enrolled_count`: el
+ * Semaforo obtiene los inscritos contando registros por OC, no leyendo un campo
+ * (`useSenceData.ts:169`). Ver docs/SEMAFORO_INTEGRACION.md §4.
+ */
 export interface TableroRecord {
   client_name: string;
   client_id: string;
@@ -23,9 +30,19 @@ export interface TableroRecord {
   init_course: string;
   end_course: string;
   rut: string;
+  /**
+   * 0 o 1 — el Semaforo cuenta `=== 1`, nunca `> 0` (`useSenceData.ts:171`). Es un flag por
+   * alumno, no un contador: el numero de conectados del curso sale de CONTAR registros.
+   */
   sence_connections: number;
-  /** Cantidad de inscritos del curso — necesaria para calcular pct_conexion. */
-  enrolled_count: number;
+  /** 0 o 1 — DJ emitida para ese alumno. */
+  dj?: number;
+  /**
+   * OTIC que financia la OC. No lo usa ninguna regla: es la columna que la seccion C del
+   * Semaforo muestra para saber a quien hay que apurar (`RectificacionRow.otic`). Opcional
+   * porque el fixture sintetico no lo trae y en el dato real viene `null` a menudo.
+   */
+  otic?: string | null;
   order_status: string;
   student_email: string;
   first_name: string;

@@ -67,7 +67,7 @@ function razonesDeBloqueo(
   if (!curso) {
     razones.push('Elige un curso del tablero.');
   } else if (!curso.llamable) {
-    razones.push(`El curso esta en nivel ${curso.nivel}: solo se llama a cursos CRITICO.`);
+    razones.push(`El curso esta en nivel ${curso.nivel} y no cumple la regla de llamada activa.`);
   }
   if (!health.ventanaHoraria.abiertaAhora) {
     razones.push(
@@ -104,7 +104,10 @@ export function Disparador({
   const [idempotencyKey, setIdempotencyKey] = useState('');
 
   const candidatos = useMemo(
-    () => cursos.filter((c) => c.llamable).sort((a, b) => a.diasRestantes - b.diasRestantes),
+    () =>
+      cursos
+        .filter((c) => c.llamable)
+        .sort((a, b) => (a.diasRestantes ?? Infinity) - (b.diasRestantes ?? Infinity)),
     [cursos],
   );
   const curso = useMemo(
@@ -174,7 +177,7 @@ export function Disparador({
 
       <div className="uv-controls">
         <label className="uv-field">
-          <span className="uv-field__label">Curso (solo CRITICO)</span>
+          <span className="uv-field__label">Curso (cumple regla de llamada)</span>
           <select
             className="uv-select"
             value={cursoKey}
@@ -186,7 +189,8 @@ export function Disparador({
                 key={`${c.clientId}#${c.orderNumber}`}
                 value={`${c.clientId}#${c.orderNumber}`}
               >
-                {c.orderNumber} · {c.clientName} · {c.pctConexion}% · {c.diasRestantes}d
+                {c.orderNumber} · {c.clientName} · {c.pctConexion}% ·{' '}
+                {c.diasRestantes === undefined ? 'sin fecha' : `${c.diasRestantes}d`}
               </option>
             ))}
           </select>

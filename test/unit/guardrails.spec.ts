@@ -15,6 +15,9 @@ describe('guardrails', () => {
     process.env.BUSINESS_HOURS_END = '19:00';
     process.env.DAILY_QUOTA = '5';
     process.env.ALLOWLIST_NUMBERS = '+56900000001,+56900000002';
+    // La whitelist dura de la etapa de pruebas se abre explicitamente para los numeros
+    // sinteticos de esta suite; su default (solo el numero real de pruebas) se prueba aparte.
+    process.env.TEST_PHONE_WHITELIST = '+56900000001,+56900000002';
     process.env.KILL_SWITCH = 'false';
   });
 
@@ -98,5 +101,48 @@ describe('guardrails', () => {
       dailyCountSoFar: 0,
     });
     expect(result).toEqual({ allowed: true });
+  });
+});
+
+describe('whitelist dura de la etapa de pruebas', () => {
+  it('por defecto (sin env) solo autoriza los numeros de pruebas de la etapa', async () => {
+    // Sin TEST_PHONE_WHITELIST seteada: es lo que corre en un entorno real.
+    delete process.env.TEST_PHONE_WHITELIST;
+    const { isPhoneInTestWhitelist, MOCK_TEST_PHONE, MOCK_TEST_PHONES, esTelefonoDelMock } =
+      await freshGuardrails();
+    // La lista es cerrada y esta fijada aca a proposito: ampliarla es una decision explicita
+    // (CLAUDE.md regla 0-bis), no algo que se cuele en un refactor.
+    expect(MOCK_TEST_PHONES).toEqual(['+56956194817', '+56955326503']);
+    expect(MOCK_TEST_PHONE).toBe('+56956194817');
+    for (const phone of MOCK_TEST_PHONES) {
+      expect(isPhoneInTestWhitelist(phone)).toBe(true);
+      expect(esTelefonoDelMock(phone)).toBe(true);
+    }
+    expect(isPhoneInTestWhitelist('+56911112222')).toBe(false);
+    expect(esTelefonoDelMock('+56911112222')).toBe(false);
+  });
+
+  it('rechaza un numero que SI esta en la allowlist pero no en la whitelist', async () => {
+    delete process.env.TEST_PHONE_WHITELIST;
+    process.env.ALLOWLIST_NUMBERS = '+56911112222';
+    const { runGuardrails } = await freshGuardrails();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-11T16:00:00.000Z')); // martes 12:00 Santiago
+
+    expect(runGuardrails('+56911112222')).toEqual({
+      allowed: false,
+      motivo: 'fuera_de_whitelist_pruebas',
+    });
+  });
+
+  it('un numero fuera de la allowlist sigue reportando no_en_allowlist, no la whitelist', async () => {
+    // El orden importa para no cambiar el motivo de rechazo que ya existia.
+    delete process.env.TEST_PHONE_WHITELIST;
+    process.env.ALLOWLIST_NUMBERS = '+56956194817';
+    const { runGuardrails } = await freshGuardrails();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-11T16:00:00.000Z'));
+
+    expect(runGuardrails('+56900000009')).toEqual({ allowed: false, motivo: 'no_en_allowlist' });
   });
 });

@@ -11,15 +11,17 @@ describe('FixtureTableroApiClient', () => {
 
   it('carga el fixture y devuelve registros con la forma de TableroRecord', async () => {
     const client = new FixtureTableroApiClient();
-    const records = await client.search({ seccion: 'A_RIESGO_CONEXION' });
+    const { records, paginas, truncado } = await client.search({ seccion: 'A_RIESGO_CONEXION' });
     expect(records.length).toBeGreaterThan(0);
     expect(records[0]).toHaveProperty('client_id');
     expect(records[0]).toHaveProperty('order_number');
+    expect(paginas).toBe(1);
+    expect(truncado).toBe(false);
   });
 
   it('incluye al menos un candidato con phone_test_only y otro sin telefono', async () => {
     const client = new FixtureTableroApiClient();
-    const records = await client.search({});
+    const { records } = await client.search({});
     expect(records.some((r) => r.phone_test_only)).toBe(true);
     expect(records.some((r) => !r.phone_test_only)).toBe(true);
   });
@@ -33,8 +35,8 @@ describe('FixtureTableroApiClient', () => {
     vi.setSystemTime(new Date(FIXTURE_REFERENCE_NOW));
 
     const client = new FixtureTableroApiClient();
-    const records = await client.search({});
-    const groups = groupOrders(records);
+    const { records } = await client.search({});
+    const { groups } = groupOrders(records);
     expect(groups.length).toBeGreaterThan(0);
 
     for (const group of groups) {

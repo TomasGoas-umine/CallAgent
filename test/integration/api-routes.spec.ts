@@ -15,6 +15,7 @@ import { IdempotencyRepository } from '../../src/repositories/idempotency-reposi
 import { QuotaRepository } from '../../src/repositories/quota-repository.js';
 import { MockElevenLabsClient } from '../../src/services/elevenlabs-client.js';
 import { FixtureTableroApiClient } from '../../src/services/tablero-api-client.fixture.js';
+import { resetMockStore } from '../../src/services/mock-tablero-store.js';
 import { generateTestSignatureHeader } from '../../src/auth/elevenlabs-signature-validator.js';
 import {
   startDynamoServerHarness,
@@ -50,6 +51,7 @@ beforeEach(() => {
   process.env = { ...ORIGINAL_ENV };
   process.env.MOCK_PROVIDERS = 'true';
   process.env.ALLOWLIST_NUMBERS = DEMO_PHONE;
+  process.env.TEST_PHONE_WHITELIST = DEMO_PHONE;
   process.env.KILL_SWITCH = 'false';
   process.env.DRY_RUN = 'false';
   process.env.DAILY_QUOTA = '5';
@@ -163,19 +165,30 @@ describe('GET /api/health', () => {
     expect(body.cuota).toMatchObject({ usados: 2, limite: 5, restantes: 3 });
     expect(body.ventanaHoraria).toMatchObject({ abiertaAhora: true });
     expect(body.allowlist).toEqual([{ value: DEMO_PHONE, masked: '***0141' }]);
-    // Sin PUBLIC_BASE_URL el webhook post-call no esta configurado: el micrositio lo avisa en
-    // vez de dejar que un followup en DIALING parezca un bug (UV-051).
-    expect(body.webhookPostCall).toEqual({ configurado: false, url: null });
+    // Sin PUBLIC_BASE_URL el webhook post-call no puede llegar: el micrositio lo avisa en vez
+    // de dejar que un followup en DIALING parezca un bug (UV-051). El campo se llama
+    // `urlConfigurada` y NO `configurado` a proposito: solo mira el .env, no prueba que la URL
+    // resuelva ni que el webhook este registrado en ElevenLabs (UV-058).
+    expect(body.webhookPostCall).toEqual({
+      urlConfigurada: false,
+      registroConfigurado: false,
+      url: null,
+      verificadoCon: 'npm run providers:check && npm run webhook:selftest',
+    });
+    // El camino por API es el que no depende de nada de eso.
+    expect(body.sincronizacionPorApi).toMatchObject({ endpoint: 'POST /api/calls/sync' });
     await app.close();
   });
 
-  it('reporta el webhook post-call como configurado cuando hay PUBLIC_BASE_URL', async () => {
+  it('con PUBLIC_BASE_URL informa la url del webhook, sin afirmar que este verificada', async () => {
     process.env.PUBLIC_BASE_URL = 'https://tunel-de-prueba.test';
     const { app } = await buildTestApp();
     const body = (await app.inject({ method: 'GET', url: '/api/health' })).json();
     expect(body.webhookPostCall).toEqual({
-      configurado: true,
+      urlConfigurada: true,
+      registroConfigurado: false,
       url: 'https://tunel-de-prueba.test/webhooks/elevenlabs/post-call',
+      verificadoCon: 'npm run providers:check && npm run webhook:selftest',
     });
     await app.close();
   });
@@ -190,14 +203,19 @@ describe('GET /api/health', () => {
 });
 
 describe('GET /api/tablero', () => {
-  it('devuelve los 15 cursos con urgencia, contacto y telefono enmascarado', async () => {
+  it('devuelve las OCs de la seccion A con urgencia, contacto y telefono enmascarado', async () => {
     const { app } = await buildTestApp();
     const response = await app.inject({ method: 'GET', url: '/api/tablero' });
     expect(response.statusCode).toBe(200);
     const body = response.json();
 
-    expect(body.total).toBe(15);
-    expect(body.cursos).toHaveLength(15);
+    // 15 OCs agrupadas, 14 en seccion A: el gate descarta la que ya esta al 100% de conexion
+    // (StatusCursosPage.tsx:535 — `pctConexion < 1`). El endpoint entrega solo la seccion A.
+    expect(body.stats.ocsAgrupadas).toBe(15);
+    expect(body.stats.ocsFueraDeSeccionA.conexion_completa).toBe(1);
+    expect(body.total).toBe(14);
+    expect(body.cursos).toHaveLength(14);
+    expect(body.cursos.every((c: { pctConexion: number }) => c.pctConexion < 100)).toBe(true);
 
     const demo = body.cursos.find(
       (c: { orderNumber: string }) => c.orderNumber === DEMO_ORDER_NUMBER,
@@ -507,5 +525,317 @@ describe('GET /api/calls y /api/calls/:id', () => {
     const response = await app.inject({ method: 'GET', url: '/api/calls/no-existe' });
     expect(response.statusCode).toBe(404);
     await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tablero Mock y Tablero Original — endpoints separados, modos que no se mezclan
+// ---------------------------------------------------------------------------
+
+describe('GET/PATCH /api/tablero/mock', () => {
+  beforeEach(() => {
+    // El store del Mock es un singleton de modulo: cada test arranca del fixture.
+    resetMockStore();
+  });
+
+  it('devuelve las OCs editables ya evaluadas, con las llamadas automaticas APAGADAS', async () => {
+    const { app } = await buildTestApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/tablero/mock' })).json();
+
+    expect(body.autoCallEnabled).toBe(false);
+    // Los numeros asignables llegan con su estado resuelto; el front no los conoce de antemano.
+    expect(body.telefonos.map((t: { valor: string }) => t.valor)).toEqual([
+      '+56956194817',
+      '+56955326503',
+    ]);
+    // Toda OC arranca en el numero por defecto, y siempre en uno de los autorizados.
+    expect(body.ordenes[0].order.phone).toBe('+56956194817');
+    expect(body.ordenes.length).toBeGreaterThan(10);
+    // Semana, % y nivel llegan calculados: el micrositio no recalcula nada.
+    expect(body.ordenes[0]).toHaveProperty('semana');
+    expect(body.ordenes[0]).toHaveProperty('pctConexion');
+    expect(body.ordenes[0]).toHaveProperty('nivel');
+    expect(body.ordenes[0].regla).toHaveProperty('dispara');
+  });
+
+  it('un PATCH valido recalcula la OC y devuelve el tablero completo', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/tablero/mock/orders/client_test_normal_s1/TEST-9104',
+      payload: { inscritos: 10, conexiones: 1 },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const oc = response
+      .json()
+      .ordenes.find((o: { order: { orderNumber: string } }) => o.order.orderNumber === 'TEST-9104');
+    expect(oc.inscritosActivos).toBe(10);
+    expect(oc.conectados).toBe(1);
+    expect(oc.pctConexion).toBe(10);
+  });
+
+  it('un PATCH invalido devuelve 400 y no cambia nada (la validacion vive en el backend)', async () => {
+    const { app } = await buildTestApp();
+    const antes = (await app.inject({ method: 'GET', url: '/api/tablero/mock' })).json();
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/tablero/mock/orders/client_test_normal_s1/TEST-9104',
+      payload: { inscritos: 2, conexiones: 5 },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().detalle).toMatch(/conexiones no puede superar/);
+    const despues = (await app.inject({ method: 'GET', url: '/api/tablero/mock' })).json();
+    expect(despues.ordenes).toEqual(antes.ordenes);
+  });
+
+  it('marcar NO INICIADA un curso ya arrancado devuelve 400 y deja la OC intacta', async () => {
+    const { app } = await buildTestApp();
+    const antes = (await app.inject({ method: 'GET', url: '/api/tablero/mock' })).json();
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/tablero/mock/orders/client_test_normal_s1/TEST-9104',
+      payload: { orderStatus: 'NO INICIADA' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    // El mensaje que ve el operador dice que estado va a usar el Semaforo y que fecha mover.
+    expect(response.json().detalle).toMatch(/CURSO EN OPERACIÓN/);
+    expect(response.json().detalle).toMatch(/fechas mandan/);
+    const despues = (await app.inject({ method: 'GET', url: '/api/tablero/mock' })).json();
+    expect(despues.ordenes).toEqual(antes.ordenes);
+  });
+
+  it('mover el inicio al futuro si deja la OC NO INICIADA, y lo avisa', async () => {
+    const { app } = await buildTestApp();
+    const futuro = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/tablero/mock/orders/client_test_normal_s1/TEST-9104',
+      payload: { initCourse: futuro },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().aviso).toMatch(/NO INICIADA/);
+    const oc = response
+      .json()
+      .ordenes.find((o: { order: { orderNumber: string } }) => o.order.orderNumber === 'TEST-9104');
+    expect(oc.order.orderStatus).toBe('NO INICIADA');
+    // Y sale de la seccion A de verdad, no solo en la pantalla.
+    expect(oc.enSeccionA).toBe(false);
+  });
+
+  it('editar con las llamadas apagadas nunca origina una llamada', async () => {
+    const { app, llamadasOriginadas, followupRepository } = await buildTestApp();
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/tablero/mock/orders/client_test_normal_s1/TEST-9104',
+      payload: { conexiones: 0 },
+    });
+
+    expect(response.json().trigger.motivo).toBe('auto_call_desactivado');
+    expect(llamadasOriginadas()).toBe(0);
+    expect(await followupRepository.listByEstados(['READY', 'DIALING'], 10)).toHaveLength(0);
+  });
+
+  it('los umbrales de llamada se editan y se restauran, y cambiarlos NO llama', async () => {
+    const { app, llamadasOriginadas } = await buildTestApp();
+
+    const puesto = await app.inject({
+      method: 'PUT',
+      url: '/api/tablero/mock/call-rules',
+      payload: { llamarSiPctMenorA: { 3: 95 } },
+    });
+    expect(puesto.statusCode).toBe(200);
+    expect(puesto.json().callRules.llamarSiPctMenorA['3']).toBe(95);
+    expect(llamadasOriginadas()).toBe(0);
+
+    const restaurado = await app.inject({
+      method: 'POST',
+      url: '/api/tablero/mock/call-rules/reset',
+    });
+    expect(restaurado.json().callRules).toEqual(restaurado.json().callRulesDefault);
+  });
+
+  it('rechaza umbrales invalidos con 400', async () => {
+    const { app } = await buildTestApp();
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/tablero/mock/call-rules',
+      payload: { llamarSiPctMenorA: { 2: 500 } },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it('encender el toggle NO llama por si solo', async () => {
+    const { app, llamadasOriginadas } = await buildTestApp();
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/tablero/mock/auto-call',
+      payload: { enabled: true },
+    });
+    expect(r.json().autoCallEnabled).toBe(true);
+    expect(llamadasOriginadas()).toBe(0);
+  });
+
+  it('rechaza un toggle que no sea booleano', async () => {
+    const { app } = await buildTestApp();
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/tablero/mock/auto-call',
+      payload: { enabled: 'si' },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+});
+
+describe('GET /api/tablero/original', () => {
+  it('cachea la lectura y `?refresh=1` la saltea', async () => {
+    // Leer el dataset real tarda ~22s; sin cache, cada visita a la pestana lo repetia.
+    process.env.TABLERO_API_BASE_URL = 'https://tablero.ejemplo.test';
+    let lecturas = 0;
+    const fetchSpy = vi.fn(async () => {
+      lecturas++;
+      return new Response(
+        JSON.stringify({ items: [], total: 0, nextCursor: null, hasMore: false }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { app } = await buildTestApp();
+
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/tablero/original' })).json().desdeCache,
+    ).toBe(false);
+    expect(lecturas).toBe(1);
+
+    // Segunda visita: sale de cache, no vuelve a leer tablero-api.
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/tablero/original' })).json().desdeCache,
+    ).toBe(true);
+    expect(lecturas).toBe(1);
+
+    // El boton Recargar fuerza lectura fresca.
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/tablero/original?refresh=1' })).json()
+        .desdeCache,
+    ).toBe(false);
+    expect(lecturas).toBe(2);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('devuelve las TRES secciones del Semaforo, cada una con su escala, sin originar nada', async () => {
+    // El reloj esta pineado en 2026-08-13. Las tres OCs estan armadas para caer una en cada
+    // seccion y en ninguna otra: son criterios independientes, no un ranking.
+    process.env.TABLERO_API_BASE_URL = 'https://tablero.ejemplo.test';
+
+    const alumno = (over: Record<string, unknown>) => ({
+      client_name: 'CLIENTE DE PRUEBA',
+      course_name: 'CURSO DE PRUEBA',
+      init_course: '2026-08-01',
+      end_course: '2026-08-31',
+      rut: '11111111-1',
+      sence_connections: 0,
+      dj: 0,
+      order_status: '',
+      student_email: '',
+      first_name: 'A',
+      last_name: 'B',
+      updated_at: '2026-08-12T00:00:00.000Z',
+      ...over,
+    });
+
+    const items = [
+      // A - Riesgo Conexion: en operacion, semana 2, 0% conectado -> CRITICO (<55%).
+      alumno({ client_id: 'cA', order_number: 'OC-A', order_status: 'CURSO EN OPERACIÓN' }),
+      alumno({ client_id: 'cA', order_number: 'OC-A', order_status: 'CURSO EN OPERACIÓN' }),
+      // B - Riesgo DJ: cerrado el 1 de agosto (13 dias > 7 -> CRITICO), 2 conectados y 1 DJ.
+      alumno({
+        client_id: 'cB',
+        order_number: 'OC-B',
+        end_course: '2026-08-01',
+        sence_connections: 1,
+        dj: 1,
+      }),
+      alumno({
+        client_id: 'cB',
+        order_number: 'OC-B',
+        end_course: '2026-08-01',
+        sence_connections: 1,
+        dj: 0,
+      }),
+      // C - Rectificacion: esperando al OTIC desde el 10 de julio (35 dias > 30 -> CRITICO).
+      // Sin conectados, asi que no entra ademas en la seccion B.
+      alumno({
+        client_id: 'cC',
+        order_number: 'OC-C',
+        order_status: 'ESPERA OC FINAL',
+        otic: 'ALIANZA PYME',
+        end_course: '2026-06-30',
+        updated_at: '2026-07-10T00:00:00.000Z',
+      }),
+    ];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ items, total: items.length, nextCursor: null, hasMore: false }),
+            { status: 200 },
+          ),
+      ),
+    );
+
+    const { app, llamadasOriginadas, followupRepository } = await buildTestApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/tablero/original' })).json();
+
+    expect(body.cursos).toHaveLength(1);
+    expect(body.cursos[0]).toMatchObject({ orderNumber: 'OC-A', nivel: 'CRITICO', semana: 2 });
+
+    // La escala de B son DIAS desde el cierre, no el porcentaje de DJ: 13 dias -> CRITICO
+    // aunque la mitad de las DJ ya este.
+    expect(body.riesgoDj).toHaveLength(1);
+    expect(body.riesgoDj[0]).toMatchObject({
+      orderNumber: 'OC-B',
+      nivel: 'CRITICO',
+      conDj: 1,
+      conectados: 2,
+      pendientes: 1,
+      pctDj: 50,
+    });
+
+    expect(body.rectificacion).toHaveLength(1);
+    expect(body.rectificacion[0]).toMatchObject({
+      orderNumber: 'OC-C',
+      nivel: 'CRITICO',
+      otic: 'ALIANZA PYME',
+      diasPendiente: 35,
+    });
+
+    // Solo lectura: leer las tres secciones no origina ni encola nada.
+    expect(llamadasOriginadas()).toBe(0);
+    expect(await followupRepository.listByEstados(['READY', 'DIALING'], 10)).toHaveLength(0);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('sin TABLERO_API_BASE_URL responde 503 y no intenta nada', async () => {
+    delete process.env.TABLERO_API_BASE_URL;
+    const { app, llamadasOriginadas, followupRepository } = await buildTestApp();
+
+    const r = await app.inject({ method: 'GET', url: '/api/tablero/original' });
+
+    expect(r.statusCode).toBe(503);
+    expect(r.json().error).toBe('tablero_api_no_configurada');
+    // Solo lectura: pase lo que pase, esta vista nunca crea nada.
+    expect(llamadasOriginadas()).toBe(0);
+    expect(await followupRepository.listByEstados(['READY', 'DIALING'], 10)).toHaveLength(0);
   });
 });

@@ -13,8 +13,13 @@
 import type {
   CallDetalleResponse,
   CallsResponse,
+  CallRules,
   DisparoResponse,
   Health,
+  MockOrderPatch,
+  MockTableroResponse,
+  SyncResponse,
+  TableroOriginalResponse,
   TableroResponse,
 } from './types';
 
@@ -51,6 +56,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await response.text();
   const payload: unknown = text ? JSON.parse(text) : null;
   if (!response.ok) {
+    if (response.status === 404) {
+      // Un 404 en una ruta propia casi nunca es "no hay datos": es que el server local no
+      // conoce ese endpoint. La causa habitual es que `npm run local:server` quedo corriendo
+      // codigo viejo — tsx NO recarga al cambiar archivos. Decirlo explicitamente ahorra
+      // buscar el problema en el lado equivocado (paso de verdad).
+      throw new ApiError(
+        404,
+        payload,
+        `El server local no expone ${path} (404). Suele ser que quedo corriendo codigo viejo: ` +
+          'para y volve a levantar `npm run local:server`.',
+      );
+    }
     const detalle =
       (payload as { detalle?: string; error?: string } | null)?.detalle ??
       (payload as { error?: string } | null)?.error ??
@@ -63,9 +80,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<Health>('/health'),
   tablero: () => request<TableroResponse>('/tablero'),
+
+  // --- Tablero Mock (editable; el unico camino automatico que puede llamar) ---
+  tableroMock: () => request<MockTableroResponse>('/tablero/mock'),
+  editarOrdenMock: (clientId: string, orderNumber: string, patch: MockOrderPatch) =>
+    request<MockTableroResponse>(
+      `/tablero/mock/orders/${encodeURIComponent(clientId)}/${encodeURIComponent(orderNumber)}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    ),
+  resetMock: () => request<MockTableroResponse>('/tablero/mock/reset', { method: 'POST' }),
+  setCallRules: (rules: CallRules) =>
+    request<MockTableroResponse>('/tablero/mock/call-rules', {
+      method: 'PUT',
+      body: JSON.stringify(rules),
+    }),
+  resetCallRules: () =>
+    request<MockTableroResponse>('/tablero/mock/call-rules/reset', { method: 'POST' }),
+  setAutoCall: (enabled: boolean) =>
+    request<MockTableroResponse>('/tablero/mock/auto-call', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
+
+  // --- Tablero Original (dato real, estrictamente de lectura) ---
+  /** `refrescar` saltea la cache del backend (lo usa el boton Recargar). */
+  tableroOriginal: (refrescar = false) =>
+    request<TableroOriginalResponse>(`/tablero/original${refrescar ? '?refresh=1' : ''}`),
   calls: () => request<CallsResponse>('/calls'),
   call: (followupId: string) =>
     request<CallDetalleResponse>(`/calls/${encodeURIComponent(followupId)}`),
+
+  /**
+   * Trae los resultados de llamada desde la API de ElevenLabs. NO origina ninguna llamada: el
+   * backend solo hace GET contra el proveedor. Es idempotente, se puede apretar las veces que
+   * haga falta.
+   */
+  sincronizar: () => request<SyncResponse>('/calls/sync', { method: 'POST', body: '{}' }),
 
   /**
    * Dispara UNA llamada. La idempotency key va en el header y es obligatoria: la genera el

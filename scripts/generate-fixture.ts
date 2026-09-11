@@ -350,7 +350,6 @@ interface FixtureRecordOut {
   end_course: string;
   rut: string;
   sence_connections: number;
-  enrolled_count: number;
   order_status: string;
   student_email: string;
   first_name: string;
@@ -398,7 +397,6 @@ function expand(spec: CourseSpec, courseIndex: number): FixtureRecordOut[] {
       // Los primeros `conexiones` alumnos del curso estan conectados: reproduce el
       // pct_conexion exacto del CSV cuando groupOrders agrega el curso.
       sence_connections: i < spec.conexiones ? 1 : 0,
-      enrolled_count: 1,
       order_status: spec.orderStatus,
       student_email: `alumno.test.${studentNumber}@correo-test.umine.dev`,
       first_name: `Alumno${studentNumber}`,

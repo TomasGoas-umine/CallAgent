@@ -11,3 +11,4 @@ npm-debug.log*
 .vitest-cache/
 .dynalite.pid
 .claude/settings.local.json
+.env.*.tmp

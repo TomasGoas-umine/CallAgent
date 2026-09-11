@@ -36,6 +36,20 @@ afterEach(() => {
 });
 
 describe('RealElevenLabsClient', () => {
+  it('envía la rama junto con las variables y conserva la atribución fuera del contexto hablado', async () => {
+    fetchMock.mockResolvedValue(respuesta(200, { conversation_id: 'conv_branch' }));
+    await new RealElevenLabsClient('test-key').startOutboundCall({
+      ...PARAMS,
+      branchId: 'branch_test',
+      attributionId: 'followup_test',
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
+    expect(body.conversation_initiation_client_data).toEqual({
+      branch_id: 'branch_test',
+      user_id: 'followup_test',
+      dynamic_variables: { ...PARAMS.dynamicVariables, followup_id: 'followup_test' },
+    });
+  });
   it('exige la API key: sin ella no se puede ni construir', () => {
     expect(() => new RealElevenLabsClient('')).toThrow(/ELEVENLABS_API_KEY/);
   });
@@ -66,6 +80,36 @@ describe('RealElevenLabsClient', () => {
       // Se manda SIEMPRE explicito, no se deja a la configuracion del agente (UV-026).
       call_recording_enabled: false,
     });
+  });
+
+  it('deja el followup_id dentro de la conversacion, sin tocar las variables del agente', async () => {
+    fetchMock.mockResolvedValue(respuesta(200, { conversation_id: 'conv_1', callSid: 'CA1' }));
+    await new RealElevenLabsClient('k').startOutboundCall({
+      ...PARAMS,
+      attributionId: 'f0110000-0000-4000-8000-000000000001',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    const initiation = body.conversation_initiation_client_data;
+    // Canal confiable: ElevenLabs devuelve las dynamic_variables verbatim en el detalle de la
+    // conversacion, asi que `calls:sync` puede saber a que FOLLOWUP pertenece aunque se haya
+    // perdido el item CONVERSATION# local.
+    expect(initiation.dynamic_variables.followup_id).toBe('f0110000-0000-4000-8000-000000000001');
+    // Best effort: ElevenLabs pisa este campo con el telefono en las llamadas Twilio.
+    expect(initiation.user_id).toBe('f0110000-0000-4000-8000-000000000001');
+    // Las variables conversacionales del agente NO se tocan (su contrato es de igualdad estricta).
+    expect(initiation.dynamic_variables.nombre_cliente).toBe('ACME');
+  });
+
+  it('sin attributionId no agrega followup_id ni user_id al payload', async () => {
+    fetchMock.mockResolvedValue(respuesta(200, { conversation_id: 'conv_1', callSid: 'CA1' }));
+    await new RealElevenLabsClient('k').startOutboundCall(PARAMS);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(body.conversation_initiation_client_data.dynamic_variables).toEqual(
+      PARAMS.dynamicVariables,
+    );
+    expect(body.conversation_initiation_client_data).not.toHaveProperty('user_id');
   });
 
   it('manda call_recording_enabled=true solo si se le pide explicitamente', async () => {

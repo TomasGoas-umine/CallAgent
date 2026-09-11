@@ -41,6 +41,11 @@ const DO_NOT_CALL_SENTINELS = new Set([
   'do_not_call',
 ]);
 
+/** El bloqueo de contacto es independiente de que el caso también requiera un humano. */
+export function isDoNotCallRequested(data: Partial<ConnectionRiskDataCollection>): boolean {
+  return DO_NOT_CALL_SENTINELS.has(data.motivo_no_conexion?.trim().toLowerCase() ?? '');
+}
+
 function extractDataCollection(
   payload: ElevenLabsPostCallPayload,
 ): Partial<ConnectionRiskDataCollection> {
@@ -80,10 +85,7 @@ export function classifyCallOutcome(payload: ElevenLabsPostCallPayload): Classif
     return { outcome: 'human_escalation', dataCollection, requiresHumanEscalation: true };
   }
 
-  if (
-    dataCollection.motivo_no_conexion &&
-    DO_NOT_CALL_SENTINELS.has(dataCollection.motivo_no_conexion.toLowerCase())
-  ) {
+  if (isDoNotCallRequested(dataCollection)) {
     return { outcome: 'do_not_call', dataCollection, requiresHumanEscalation: false };
   }
 

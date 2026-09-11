@@ -319,16 +319,63 @@ async function chequearGeoPermissions(auth: string): Promise<void> {
   }
 }
 
-function chequearWebhook(): void {
+interface WorkspaceWebhook {
+  name?: string;
+  webhook_id: string;
+  webhook_url: string;
+  is_disabled?: boolean;
+  is_auto_disabled?: boolean;
+  auth_type?: string;
+  most_recent_failure_error_code?: number | null;
+  most_recent_failure_timestamp?: number | null;
+}
+interface ConvaiSettings {
+  webhooks?: {
+    post_call_webhook_id?: string | null;
+    events?: string[] | null;
+    send_audio?: boolean | null;
+  } | null;
+}
+
+/**
+ * Placeholders que quedaron dando vueltas en los .env de desarrollo. Si el secreto es uno de
+ * estos, la firma de todo webhook real va a fallar con 401 y el resultado de la llamada se
+ * pierde en silencio (el handler responde 401 y ElevenLabs reintenta hasta desactivar el
+ * webhook). Vale la pena detectarlo antes y no despues de gastar minutos.
+ */
+const SECRETOS_PLACEHOLDER = new Set([
+  'demo-local-secret',
+  'cualquier-valor-para-local',
+  'test-webhook-secret',
+  'changeme',
+]);
+
+async function chequearWebhook(): Promise<void> {
   console.log('\n== 5. Webhook post-call (sin esto no llega el resultado de la llamada) ==');
-  if (!env.publicBaseUrl) {
-    // DIFERIDO a proposito (UV-051): la fase actual es validar que la llamada suene y converse.
-    // No es bloqueante para eso, asi que se reporta como aviso y no como FALTA.
+
+  // --- 5a. El secreto ---
+  if (SECRETOS_PLACEHOLDER.has(env.elevenlabsWebhookSecret)) {
+    falta(
+      `ELEVENLABS_WEBHOOK_SECRET tiene un placeholder de desarrollo ("${env.elevenlabsWebhookSecret}"), ` +
+        'no el secreto real. ElevenLabs firma cada webhook con el suyo, asi que el handler va a ' +
+        'responder 401 y el resultado de la llamada se pierde. El secreto real lo muestra ' +
+        'ElevenLabs UNA sola vez, al crear el webhook (Settings -> Webhooks)',
+    );
+  } else if (env.elevenlabsWebhookSecret && !env.elevenlabsWebhookSecret.startsWith('wsec_')) {
     aviso(
-      'PUBLIC_BASE_URL vacia — el webhook post-call NO esta configurado (diferido a proposito, ' +
-        'UV-051). Consecuencia esperada: la llamada suena y conversa, pero el resultado nunca ' +
-        'vuelve; el FOLLOWUP se queda en DIALING y el dashboard no muestra transcripcion ni ' +
-        'clasificacion. Para cerrar el ciclo hace falta un tunel (ver README, "Llamadas reales")',
+      'ELEVENLABS_WEBHOOK_SECRET no empieza con "wsec_", que es el prefijo habitual de los ' +
+        'secretos de webhook de ElevenLabs. Puede estar bien (verificalo con ' +
+        '`npm run webhook:selftest`), pero revisa que no sea un valor inventado',
+    );
+  }
+
+  // --- 5b. La URL publica ---
+  if (!env.publicBaseUrl) {
+    falta(
+      'PUBLIC_BASE_URL vacia — el server corre en localhost y ElevenLabs no puede alcanzarlo. ' +
+        'Sin esto la llamada suena y conversa, pero el FOLLOWUP se queda en DIALING para ' +
+        'siempre, sin transcripcion ni clasificacion. Levanta el tunel con `npm run tunnel:up` ' +
+        '(escribe PUBLIC_BASE_URL solo)',
     );
     return;
   }
@@ -336,18 +383,121 @@ function chequearWebhook(): void {
     falta(`PUBLIC_BASE_URL debe ser https:// (tiene: ${env.publicBaseUrl})`);
     return;
   }
+  const urlEsperada = `${env.publicBaseUrl}/webhooks/elevenlabs/post-call`;
   ok(`PUBLIC_BASE_URL = ${env.publicBaseUrl}`);
-  console.log('\n  Registra estas URLs en los paneles:');
-  console.log(
-    `    ElevenLabs (Settings -> Webhooks, post-call):  ${env.publicBaseUrl}/webhooks/elevenlabs/post-call`,
+
+  if (!env.elevenlabsApiKey) {
+    aviso('sin ELEVENLABS_API_KEY no se puede verificar el registro del webhook en ElevenLabs');
+    return;
+  }
+  const headers = { 'xi-api-key': env.elevenlabsApiKey };
+
+  // --- 5c. Que el webhook exista del lado de ElevenLabs, con ESTA url ---
+  const lista = await getJson<{ webhooks?: WorkspaceWebhook[] }>(
+    'https://api.elevenlabs.io/v1/workspace/webhooks',
+    headers,
   );
-  console.log(
-    `    Twilio (opcional, status callback):            ${env.publicBaseUrl}/webhooks/twilio/status`,
+  if (lista.status !== 200) {
+    aviso(
+      `GET /v1/workspace/webhooks devolvio HTTP ${lista.status} — no se pudo verificar el ` +
+        `registro. Revisalo a mano en el panel. Deberia apuntar a: ${urlEsperada}`,
+    );
+    return;
+  }
+  const webhooks = lista.body?.webhooks ?? [];
+  const registrado = webhooks.find((w) => w.webhook_url === urlEsperada);
+
+  if (webhooks.length === 0) {
+    falta(
+      'no hay NINGUN webhook registrado en la cuenta de ElevenLabs. Creado en Settings -> ' +
+        `Webhooks, auth type HMAC, apuntando a: ${urlEsperada}`,
+    );
+    return;
+  }
+  if (!registrado) {
+    falta(
+      `ninguno de los ${webhooks.length} webhook(s) de la cuenta apunta a ${urlEsperada}. ` +
+        'Con un quick tunnel de cloudflared la URL cambia en cada reinicio: hay que actualizarla ' +
+        'en el panel. Registrados hoy:',
+    );
+    for (const w of webhooks) {
+      console.log(`         ${w.webhook_id}  ${w.webhook_url}  ${w.name ?? ''}`);
+    }
+    return;
+  }
+  ok(`webhook registrado en ElevenLabs: ${registrado.webhook_id} -> ${registrado.webhook_url}`);
+
+  if (registrado.auth_type && registrado.auth_type !== 'hmac') {
+    falta(
+      `el webhook esta configurado con auth_type "${registrado.auth_type}", pero el handler solo ` +
+        'valida HMAC (header ElevenLabs-Signature). Cambialo a HMAC',
+    );
+  }
+  if (registrado.is_auto_disabled) {
+    falta(
+      'ElevenLabs AUTO-DESACTIVO este webhook (10+ fallos consecutivos). Reactivalo en el panel ' +
+        'despues de arreglar la causa — mira el error de abajo',
+    );
+  } else if (registrado.is_disabled) {
+    falta('el webhook esta desactivado en el panel de ElevenLabs');
+  } else {
+    ok('el webhook esta activo');
+  }
+  if (registrado.most_recent_failure_error_code) {
+    const cuando = registrado.most_recent_failure_timestamp
+      ? new Date(registrado.most_recent_failure_timestamp * 1000).toISOString()
+      : 'sin fecha';
+    aviso(
+      `ultimo fallo de entrega: HTTP ${registrado.most_recent_failure_error_code} (${cuando}). ` +
+        'Un 401 ahi significa secreto equivocado; un error de red, tunel caido',
+    );
+  }
+
+  // --- 5d. Que ese webhook este ASIGNADO como post-call ---
+  const settings = await getJson<ConvaiSettings>(
+    'https://api.elevenlabs.io/v1/convai/settings',
+    headers,
   );
-  aviso(
-    'el secreto que te muestra ElevenLabs al crear el webhook va en ELEVENLABS_WEBHOOK_SECRET ' +
-      '(se muestra UNA sola vez)',
+  if (settings.status !== 200) {
+    aviso(
+      `GET /v1/convai/settings devolvio HTTP ${settings.status} — no se pudo verificar que el ` +
+        'webhook este asignado como post-call. Revisalo en Agents Platform -> Settings',
+    );
+    return;
+  }
+  const agent = await getJson<{
+    platform_settings?: { workspace_overrides?: { webhooks?: ConvaiSettings['webhooks'] } };
+  }>(
+    `https://api.elevenlabs.io/v1/convai/agents/${encodeURIComponent(env.elevenlabsAgentId)}`,
+    headers,
   );
+  const override = agent.body?.platform_settings?.workspace_overrides?.webhooks;
+  const effective = override?.post_call_webhook_id ? override : settings.body?.webhooks;
+  const origen = override?.post_call_webhook_id ? 'agente' : 'workspace';
+  const asignado = effective?.post_call_webhook_id ?? null;
+  if (!asignado) {
+    falta(
+      'el webhook existe pero NO esta asignado como post-call webhook del workspace: ' +
+        'ElevenLabs no le va a entregar nada. Actualizalo en Agents Platform -> Settings ' +
+        '(seccion de webhooks). OJO: un agente puede tener su propio override, que gana sobre ' +
+        'esta configuracion del workspace',
+    );
+  } else if (asignado !== registrado.webhook_id) {
+    falta(
+      `el post-call webhook del workspace es ${asignado}, que NO es el que apunta a tu tunel ` +
+        `(${registrado.webhook_id}). Cambialo en Agents Platform -> Settings`,
+    );
+  } else {
+    ok(`asignado como post-call webhook del ${origen}`);
+    const eventos = effective?.events ?? [];
+    ok(`eventos suscritos: ${eventos.length > 0 ? eventos.join(', ') : '(ninguno declarado)'}`);
+    if (eventos.length > 0 && !eventos.includes('transcript')) {
+      falta(
+        'el evento "transcript" no esta suscrito: sin el no llega el payload ' +
+          'post_call_transcription, que es el unico que este backend procesa',
+      );
+    }
+  }
 }
 
 async function main(): Promise<void> {
@@ -358,7 +508,7 @@ async function main(): Promise<void> {
   chequearGuardrails();
   await chequearElevenLabs();
   await chequearTwilio();
-  chequearWebhook();
+  await chequearWebhook();
 
   console.log('\n== Resumen ==');
   if (errores === 0) {
@@ -366,7 +516,9 @@ async function main(): Promise<void> {
     if (env.mockProviders) {
       console.log('  Siguiente paso: MOCK_PROVIDERS=false en .env + reiniciar local:server.');
     } else {
-      console.log('  Todo listo para llamar de verdad. La primera llamada, a tu propio numero.');
+      console.log(
+        '  Configuración de proveedores válida. Antes de llamar, verifica contexto y transporte con npm run agent:check y npm run webhook:selftest.',
+      );
     }
   } else {
     console.log(`  ${errores} bloqueante(s) y ${avisos} aviso(s). Resolve los FALTA de arriba.`);

@@ -8,8 +8,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { buildTableroApiClient } from '../../services/tablero-api-client.factory.js';
-import { groupOrders } from '../../services/order-status-promoter.js';
-import { getCourseWeek, clasificarConexion } from '../../services/urgency-classifier.js';
+import { readSemaforo, type SemaforoStats } from '../../services/course-lookup.js';
 import { computeIdempotencyKey } from '../../services/idempotency.js';
 import { isKillSwitchActive, isDailyQuotaExceeded } from '../../services/guardrails.js';
 import { FollowupRepository } from '../../repositories/followup-repository.js';
@@ -23,10 +22,17 @@ import { tomorrowAtBusinessHoursStart } from '../../utils/scheduling.js';
 import { MOTIVO_RIESGO_CONEXION } from '../../domain/followup.js';
 import type { Followup } from '../../domain/followup.js';
 import type { ApiResponse } from '../../utils/responses.js';
+import type { TableroApiClient } from '../../services/tablero-api-client.js';
 
 const MOTIVO = MOTIVO_RIESGO_CONEXION;
 
 export interface EvaluatorDeps {
+  /**
+   * Fuente del Semaforo. Por defecto la factory (Mock editable en local). Inyectable como en el
+   * dispatcher y el disparo manual, para que los tests fijen el dato que quieren evaluar en vez
+   * de depender de en que modo quedo configurado el entorno.
+   */
+  tableroClient?: TableroApiClient;
   followupRepository?: FollowupRepository;
   contactRepository?: ContactRepository;
   idempotencyRepository?: IdempotencyRepository;
@@ -39,6 +45,8 @@ export type DiscardMotivo =
 export interface EvaluatorResult {
   killSwitch: boolean;
   dryRun: boolean;
+  /** Contadores de la lectura del Semaforo: paginas, registros, OCs agrupadas y descartes. */
+  semaforo: SemaforoStats | null;
   candidatesEvaluated: number;
   created: Array<{
     followupId: string;
@@ -58,6 +66,7 @@ export async function runCandidateEvaluator(deps: EvaluatorDeps = {}): Promise<E
   const result: EvaluatorResult = {
     killSwitch: isKillSwitchActive(),
     dryRun: env.dryRun,
+    semaforo: null,
     candidatesEvaluated: 0,
     created: [],
     discarded: [],
@@ -68,16 +77,17 @@ export async function runCandidateEvaluator(deps: EvaluatorDeps = {}): Promise<E
     return result;
   }
 
-  const tableroClient = buildTableroApiClient();
-  const records = await tableroClient.search({ seccion: 'A_RIESGO_CONEXION' });
-  const groups = groupOrders(records);
+  const tableroClient = deps.tableroClient ?? buildTableroApiClient();
+  // Una sola lectura del Semaforo, con los gates de seccion A ya aplicados: `candidatoALlamada`
+  // es `seccion A` + `nivel CRITICO`. Clasificar sin el gate metia cursos ya terminados.
+  const { evaluaciones, stats } = await readSemaforo(tableroClient);
+  result.semaforo = stats;
 
   let createdToday = 0;
 
-  for (const group of groups) {
-    const semana = getCourseWeek(group.initCourse, group.endCourse);
-    const nivel = clasificarConexion(semana, group.pctConexion);
-    if (nivel !== 'CRITICO') continue; // unico nivel/seccion en alcance de este MVP
+  for (const evaluacion of evaluaciones) {
+    if (!evaluacion.candidatoALlamada) continue; // unico caso de uso del MVP
+    const group = evaluacion.group;
 
     result.candidatesEvaluated++;
 
@@ -178,6 +188,14 @@ export async function runCandidateEvaluator(deps: EvaluatorDeps = {}): Promise<E
   }
 
   logger.info('candidate_evaluator_finished', {
+    paginas: stats.paginas,
+    registros: stats.registrosRecibidos,
+    registrosDescartados: stats.registrosDescartados,
+    ocsAgrupadas: stats.ocsAgrupadas,
+    ocsFueraDeSeccionA: stats.ocsFueraDeSeccionA,
+    ocsSeccionA: stats.ocsSeccionA,
+    porNivel: stats.porNivel,
+    ocsCriticas: stats.ocsCriticas,
     candidatesEvaluated: result.candidatesEvaluated,
     created: result.created.length,
     discarded: result.discarded.length,

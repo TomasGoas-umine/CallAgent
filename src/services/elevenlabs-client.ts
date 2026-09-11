@@ -13,6 +13,7 @@ import { logger } from '../utils/logger.js';
 
 export interface StartOutboundCallParams {
   agentId: string;
+  branchId?: string;
   agentPhoneNumberId: string;
   toNumber: string;
   dynamicVariables: Record<string, string>;
@@ -22,6 +23,27 @@ export interface StartOutboundCallParams {
    * su configuracion, para que la decision quede en el codigo y no en un panel.
    */
   callRecordingEnabled?: boolean;
+  /**
+   * Nuestro `followup_id`, que queda guardado DENTRO de la conversacion en ElevenLabs para que
+   * su resultado sea recuperable pase lo que pase: el item local `CONVERSATION#<id> META` puede
+   * perderse (base local recreada, otro entorno, webhook que nunca llego) y aun asi
+   * `services/conversation-sync` puede leer de la API a que FOLLOWUP pertenece la conversacion.
+   *
+   * Viaja por DOS canales, a proposito:
+   *
+   *   - `dynamic_variables.followup_id` — el confiable. ElevenLabs devuelve las dynamic
+   *     variables verbatim en `GET /v1/convai/conversations/{id}` (verificado contra la cuenta).
+   *     Se inyecta ACA y no en `buildAgentDynamicVariables` porque esa funcion define el
+   *     contrato conversacional del agente: son exactamente las siete variables que su prompt
+   *     usa, y un test las compara por igualdad estricta contra
+   *     `scripts/lib/sence-agent-config.ts`. `followup_id` es metadato tecnico, no algo que el
+   *     agente diga; agregarlo alla romperia ese contrato y ademas apareceria en el modal de
+   *     confirmacion del micrositio.
+   *   - `user_id` — best effort. Suena al campo indicado ("ID of the end user"), pero ElevenLabs
+   *     lo rellena por su cuenta: en las llamadas Twilio de esta cuenta quedo con el numero de
+   *     telefono. Se manda igual por si sobrevive, pero NO se depende de el.
+   */
+  attributionId?: string;
 }
 
 export interface StartOutboundCallResult {
@@ -88,7 +110,12 @@ export class RealElevenLabsClient implements ElevenLabsClient {
           agent_phone_number_id: params.agentPhoneNumberId,
           to_number: params.toNumber,
           conversation_initiation_client_data: {
-            dynamic_variables: params.dynamicVariables,
+            ...(params.branchId ? { branch_id: params.branchId } : {}),
+            // Ver `attributionId`: los dos canales, el confiable primero.
+            dynamic_variables: params.attributionId
+              ? { ...params.dynamicVariables, followup_id: params.attributionId }
+              : params.dynamicVariables,
+            ...(params.attributionId ? { user_id: params.attributionId } : {}),
           },
           call_recording_enabled: params.callRecordingEnabled ?? false,
         }),

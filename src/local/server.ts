@@ -7,6 +7,8 @@
  */
 
 import Fastify from 'fastify';
+import { registerHistoryRoutes } from './history-routes.js';
+import { ConversationArchiveRepository } from '../repositories/conversation-archive-repository.js';
 import type { FastifyReply } from 'fastify';
 import { runCandidateEvaluator } from '../handlers/candidate-evaluator/handler.js';
 import { dispatchFollowup } from '../handlers/call-dispatcher/handler.js';
@@ -19,7 +21,7 @@ import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
 import type { ApiResponse } from '../utils/responses.js';
 
-const app = Fastify({ logger: false });
+const app = Fastify({ logger: false, bodyLimit: 8 * 1024 * 1024 });
 
 // Content-type parsers que preservan el body crudo (necesario para validar firmas HMAC
 // exactas — nunca validar contra el objeto ya re-serializado, ver auth/elevenlabs-signature-validator.ts).
@@ -44,6 +46,8 @@ function send(reply: FastifyReply, result: ApiResponse) {
 
 // --- API de operacion del micrositio (ver src/local/api-routes.ts) ---
 await app.register(registerApiRoutes);
+await app.register(registerHistoryRoutes);
+const conversationArchive = new ConversationArchiveRepository();
 
 // --- candidate-evaluator (en AWS real: EventBridge cron; aca: POST manual o local:demo) ---
 app.post('/internal/evaluator', async (_request, reply) => {
@@ -76,7 +80,10 @@ app.post('/internal/dispatcher/drain', async (_request, reply) => {
 app.post('/webhooks/elevenlabs/post-call', async (request, reply) => {
   const rawBody = request.body as string;
   const signature = request.headers['elevenlabs-signature'] as string | undefined;
-  const result = await handleElevenLabsPostCall(rawBody, signature);
+  const result = await handleElevenLabsPostCall(rawBody, signature, {
+    archive: conversationArchive,
+    agentId: env.elevenlabsAgentId,
+  });
   send(reply, result);
 });
 

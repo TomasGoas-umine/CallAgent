@@ -55,6 +55,7 @@ beforeEach(() => {
   process.env = { ...ORIGINAL_ENV };
   process.env.MOCK_PROVIDERS = 'true';
   process.env.ALLOWLIST_NUMBERS = DEMO_PHONE;
+  process.env.TEST_PHONE_WHITELIST = DEMO_PHONE;
   process.env.KILL_SWITCH = 'false';
   process.env.DAILY_QUOTA = '5';
   process.env.BUSINESS_HOURS_START = '09:00';

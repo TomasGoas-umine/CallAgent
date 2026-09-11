@@ -71,7 +71,9 @@ export function ConfirmModal({
           <span className="uv-kv__k">Urgencia</span>
           <span>
             {curso.nivel} — semana {curso.semana}, {curso.pctConexion}% de conexion,{' '}
-            {curso.diasRestantes} dias restantes
+            {curso.diasRestantes === undefined
+              ? 'Sin fecha de termino'
+              : `${curso.diasRestantes} dias restantes`}
           </span>
         </div>
 
