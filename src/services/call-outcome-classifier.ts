@@ -6,8 +6,13 @@
  * configurado en produccion con sus criterios de evaluacion definitivos; hoy es una
  * aproximacion razonable basada en los 5 campos de data_collection modelados en el prompt):
  *
+ *  0. Twilio dice que la llamada nunca se establecio -> no_answer / busy / call_failed
+ *     (ver `classifyTwilioCall`). Va PRIMERO porque es el unico dato duro sobre si el telefono
+ *     llego a sonar y a ser atendido: si no hubo conversacion, nada de lo que siga puede
+ *     contradecirlo.
  *  1. La llamada nunca fue contestada -> no_answer / busy / voicemail / invalid_number
- *     (segun data.status / metadata del proveedor).
+ *     (segun data.status / metadata del proveedor — en payloads REALES esto no se activa nunca,
+ *     ver UV-053: por eso existe el paso 0).
  *  2. requiere_humano = true                              -> human_escalation
  *  3. motivo_no_conexion indica rechazo explicito a futuro contacto -> do_not_call
  *  4. tiene_bloqueo_tecnico = true                          -> technical_problem
@@ -24,6 +29,7 @@ import type {
   ConnectionRiskDataCollection,
   ElevenLabsPostCallPayload,
 } from '../domain/call.js';
+import type { TwilioCallSnapshot } from './twilio-calls-client.js';
 
 const NOT_ANSWERED_STATUS_MAP: Record<string, CallOutcome> = {
   'no-answer': 'no_answer',
@@ -67,15 +73,61 @@ function allEvaluationCriteriaSucceeded(payload: ElevenLabsPostCallPayload): boo
   return Object.values(results).every((r) => r.result === 'success');
 }
 
+/**
+ * Estado final de Twilio -> resultado. Solo los que significan "no hubo conversacion": un
+ * `completed` no decide nada aca, lo decide el contenido de la conversacion.
+ *
+ * `canceled` cae en `call_failed` y no en `no_answer` a proposito: significa que la llamada se
+ * corto antes de ser atendida (cancelada por API, o Twilio la abandono), no que alguien la dejo
+ * sonar. Los dos se tratan igual aguas abajo — la diferencia es para poder leer el registro.
+ */
+const TWILIO_STATUS_MAP: Record<string, CallOutcome> = {
+  'no-answer': 'no_answer',
+  busy: 'busy',
+  failed: 'call_failed',
+  canceled: 'call_failed',
+};
+
+/**
+ * Lo que Twilio sabe del resultado de la llamada, o `null` si no aporta nada (la atendieron, o
+ * todavia esta en curso) y hay que mirar la conversacion.
+ *
+ * `answered_by` solo viene cuando la llamada se origino con Answering Machine Detection — la
+ * integracion nativa de ElevenLabs no la activa hoy, asi que en la practica es `null`. Se lee
+ * igual: es la unica forma limpia de marcar un buzon de voz, y cuesta cero.
+ */
+export function classifyTwilioCall(twilio: TwilioCallSnapshot): CallOutcome | null {
+  const porEstado = TWILIO_STATUS_MAP[twilio.status];
+  if (porEstado) return porEstado;
+  if (twilio.status !== 'completed') return null;
+
+  const atendioMaquina = twilio.answeredBy?.startsWith('machine') || twilio.answeredBy === 'fax';
+  if (atendioMaquina) return 'voicemail';
+  return null;
+}
+
 export interface ClassifiedCallOutcome {
   outcome: CallOutcome;
   dataCollection: Partial<ConnectionRiskDataCollection>;
   requiresHumanEscalation: boolean;
 }
 
-export function classifyCallOutcome(payload: ElevenLabsPostCallPayload): ClassifiedCallOutcome {
+/**
+ * @param twilio Estado final que reporto Twilio para la misma llamada, si se pudo consultar
+ *   (`services/twilio-calls-client`). Es opcional: sin el, la clasificacion es exactamente la de
+ *   antes. Con el, deja de cerrarse como `contacted` una llamada que nadie atendio.
+ */
+export function classifyCallOutcome(
+  payload: ElevenLabsPostCallPayload,
+  twilio?: TwilioCallSnapshot | null,
+): ClassifiedCallOutcome {
   const statusOutcome = NOT_ANSWERED_STATUS_MAP[payload.data.status];
   const dataCollection = extractDataCollection(payload);
+
+  const twilioOutcome = twilio ? classifyTwilioCall(twilio) : null;
+  if (twilioOutcome) {
+    return { outcome: twilioOutcome, dataCollection, requiresHumanEscalation: false };
+  }
 
   if (statusOutcome) {
     return { outcome: statusOutcome, dataCollection, requiresHumanEscalation: false };

@@ -61,8 +61,14 @@ de disparo y no debe tenerlo; hay un test que lo verifica.
   en dos secciones al mismo tiempo, o en ninguna. Cada tabla muestra todas las OCs, con las de su
   seccion primero y, para el resto, el motivo por el que quedan fuera — es un editor, y hace
   falta poder agarrar una OC cualquiera y llevarla a la seccion que se quiere probar.
-- **El interruptor de llamadas automaticas arranca apagado** y encenderlo no llama por si solo:
-  hace falta guardar una edicion que produzca la transicion.
+- **Hay un interruptor de llamadas automaticas POR SECCION**, dentro de la vineta de cada
+  tablero, y arranca apagado. Encender el de riesgo de conexion **no** enciende el de
+  declaraciones juradas: son dos criterios distintos y el operador prueba uno a la vez. Encender
+  uno tampoco llama por si solo — hace falta guardar una edicion que produzca la transicion en
+  esa seccion. La seccion C no tiene interruptor porque no llama.
+- **El interruptor vive dentro del `<summary>`**, que es el mismo elemento que colapsa la
+  seccion: por eso el `<label>` detiene la propagacion del click. Sin eso, encender las llamadas
+  ademas cerraba el tablero. Hay un test que lo fija.
 - **El panel de configuracion al pie siempre esta visible**, con el umbral activo por semana, el
   valor original del Semaforo, cuales estan modificados y un boton para restaurar. Se editan en
   un modal. Esos umbrales deciden **cuando se llama**, no la criticidad que muestra el tablero.
@@ -72,17 +78,20 @@ de disparo y no debe tenerlo; hay un test que lo verifica.
 
 #### Que edita cada seccion, y cual llama
 
-| Seccion                 | Campos editables ahi                                                                       | Columna «¿Llama?» |
-| ----------------------- | ------------------------------------------------------------------------------------------ | ----------------- |
-| **A · Riesgo Conexion** | estado, inicio, termino, inscritos, conexiones, contacto/empresa/curso y telefono de la OC | **si** — la unica |
-| **B · Riesgo DJ**       | termino del curso, conectados, con DJ                                                      | no existe         |
-| **C · Rectificacion**   | estado de la OC, ultima actualizacion                                                      | no existe         |
+| Seccion                 | Campos editables ahi                                                                       | ¿Llama?                       |
+| ----------------------- | ------------------------------------------------------------------------------------------ | ----------------------------- |
+| **A · Riesgo Conexion** | estado, inicio, termino, inscritos, conexiones, contacto/empresa/curso y telefono de la OC | si, con su interruptor        |
+| **B · Riesgo DJ**       | termino del curso, conectados, con DJ                                                      | si, con SU propio interruptor |
+| **C · Rectificacion**   | estado de la OC, ultima actualizacion                                                      | **no** — sin interruptor      |
 
-Las secciones B y C **no tienen forma de llamar**: no es que el boton este escondido, es que la
-decision de llamar la arma el backend unicamente desde la seccion A (`mock-tablero-store` calcula
-`regla` con el nivel de conexion y nada mas). Bajar todos los umbrales de llamada al maximo
-tampoco las habilita — no existe un umbral de DJ ni de rectificacion que tocar. Hay tests de
-integracion que lo verifican con las llamadas automaticas ENCENDIDAS (ADR-011).
+Una OC pertenece a **una sola** seccion de voz a la vez y el backend la decide (`evaluation.seccion`):
+si esta en riesgo de DJ llama por declaraciones juradas, y si no, por conexion. De ahi salen el
+motivo del agente (`riesgo_dj_critico` / `riesgo_conexion_critico`) y **cual de los dos
+interruptores la gobierna**. El front no lo recalcula.
+
+La seccion C **no tiene forma de llamar**: no es que el boton este escondido, es que no existe un
+interruptor para ella y el backend rechaza con `seccion_invalida` cualquier intento de
+encenderla. Una OC Final que no llega se resuelve con el OTIC, no con el alumno (ADR-011).
 
 La seccion A arranca abierta y las otras dos cerradas: entrar al tablero no puede significar tres
 tablas largas de golpe.

@@ -1,0 +1,122 @@
+{
+  "verified_at": "2026-09-11T16:46:37.592Z",
+  "agent_id": "agent_5201m1f6e9ccfb6t5gafcw2azzrk",
+  "branch_id": "agtbrch_4001m1f6eapce618c4vn02zecdzx",
+  "version_before": "agtvrsn_1601m26702v8fzhrj4z5e9h372t3",
+  "version_id": "agtvrsn_1101m28nmpace7nrzbcq9gsa44na",
+  "nodes": 16,
+  "connections": 68,
+  "prompt_characters_before": 5107,
+  "prompt_characters_after": 5211,
+  "workflow_sha256": "4122e54b1d78bd4c61f5b1e2fe594c9ff9d826642c4475d6d3e990e61b48366a",
+  "test_invocation_id": "suite_5301m28nefype7ergq6aq4kcdjak",
+  "tests_ran_against_draft": true,
+  "verified_saved_config_by_get": true,
+  "phone_calls_made": 0,
+  "tests": [
+    {
+      "test_id": "test_3001m28nedbqe0brxgfgk25mc25s",
+      "name": "Umine criterio B: Dependencia OTIC a humano",
+      "status": "passed",
+      "workflow_node_id": "diagnostico",
+      "result": "success"
+    },
+    {
+      "test_id": "test_3801m28neefhe9qvw0marnb70w34",
+      "name": "Umine criterio B: DJ ya entregadas",
+      "status": "passed",
+      "workflow_node_id": null,
+      "result": "success"
+    },
+    {
+      "test_id": "test_7501m28nee2kft49v7gppntjxw4d",
+      "name": "Umine criterio B: DJ compromiso",
+      "status": "passed",
+      "workflow_node_id": null,
+      "result": "success"
+    },
+    {
+      "test_id": "test_1901m28neewce27rsfbe164zg2w2",
+      "name": "Umine criterio B: DJ rechazo permanente",
+      "status": "passed",
+      "workflow_node_id": null,
+      "result": "success"
+    },
+    {
+      "test_id": "test_3001m28ned45ebsrx4xy1k329gj0",
+      "name": "Umine criterio B: Conexión completa no resuelve DJ",
+      "status": "passed",
+      "workflow_node_id": "contexto_dj",
+      "result": "success"
+    },
+    {
+      "test_id": "test_0001m28necjhetgtmhhk38ft3wmw",
+      "name": "Umine criterio B: Identidad a contexto DJ",
+      "status": "passed",
+      "workflow_node_id": "identificacion",
+      "result": "success"
+    },
+    {
+      "test_id": "test_7301m28nedrkfc78at5815chqb9e",
+      "name": "Umine criterio B: Criterio A conserva su ruta",
+      "status": "passed",
+      "workflow_node_id": "identificacion",
+      "result": "success"
+    }
+  ],
+  "preserved": [
+    "tts",
+    "asr",
+    "turn",
+    "conversation",
+    "vad",
+    "llm",
+    "temperature",
+    "tool_ids",
+    "knowledge_base",
+    "privacy",
+    "auth",
+    "call_limits",
+    "overrides",
+    "workspace_overrides"
+  ],
+  "analysis_checks": [
+    {
+      "name": "Umine criterio B: DJ ya entregadas",
+      "expected_outcome": "resolved",
+      "actual_outcome": "resolved",
+      "extracted": {
+        "motivo_no_conexion": "resuelto_segun_interlocutor",
+        "tiene_bloqueo_tecnico": false,
+        "compromiso_fecha": "",
+        "requiere_humano": false,
+        "necesidad_capacitacion_futura": ""
+      }
+    },
+    {
+      "name": "Umine criterio B: DJ compromiso",
+      "expected_outcome": "resolved",
+      "actual_outcome": "resolved",
+      "extracted": {
+        "motivo_no_conexion": "Faltó coordinación interna para completar declaraciones juradas; se compromete a entregarlas el 15 de septiembre.",
+        "tiene_bloqueo_tecnico": false,
+        "compromiso_fecha": "15 de septiembre",
+        "requiere_humano": false,
+        "necesidad_capacitacion_futura": ""
+      }
+    },
+    {
+      "name": "Umine criterio B: DJ rechazo permanente",
+      "expected_outcome": "do_not_call",
+      "actual_outcome": "do_not_call",
+      "extracted": {
+        "motivo_no_conexion": "no_contactar",
+        "tiene_bloqueo_tecnico": false,
+        "compromiso_fecha": "",
+        "requiere_humano": false,
+        "necesidad_capacitacion_futura": ""
+      }
+    }
+  ],
+  "analysis_method": "Remote text analysis of completed simulation transcripts, new_turns_limit=0, against saved Main version"
+}

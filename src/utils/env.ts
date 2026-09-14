@@ -54,9 +54,20 @@ export const env = {
   elevenlabsAgentPhoneNumberId: str('ELEVENLABS_AGENT_PHONE_NUMBER_ID', ''),
   elevenlabsWebhookSecret: str('ELEVENLABS_WEBHOOK_SECRET', ''),
 
+  /**
+   * Credenciales de Twilio. Ademas de validar la firma del webhook de status, son lo que le
+   * permite a `calls:sync` preguntar como termino realmente una llamada (`no-answer`, `busy`,
+   * `failed`): ElevenLabs no lo distingue, ver UV-053. Tienen que ser de la MISMA cuenta de
+   * Twilio que ElevenLabs usa para llamar, o los `call_sid` no se van a encontrar.
+   */
   twilioAccountSid: str('TWILIO_ACCOUNT_SID', ''),
   twilioAuthToken: str('TWILIO_AUTH_TOKEN', ''),
   twilioPhoneNumber: str('TWILIO_PHONE_NUMBER', ''),
+  /**
+   * Minutos que se le dan a una llamada recien originada antes de que el reconciliador la
+   * considere colgada. Por debajo de esto, un FOLLOWUP en DIALING probablemente este hablando.
+   */
+  twilioReconcileGraceMinutes: num('TWILIO_RECONCILE_GRACE_MINUTES', 10),
 
   /**
    * Grabacion de la llamada. Default `false` (ADR-006 / UV-026: el piloto asume que no se

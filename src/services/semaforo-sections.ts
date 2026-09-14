@@ -10,7 +10,7 @@
  * donde lo que falta es la Declaracion Jurada, no que el alumno se conecte. Llamar ahi es
  * llamar por algo que ya no tiene arreglo.
  *
- * Seccion A — Riesgo Conexion (`StatusCursosPage.tsx:528-536`), la unica que puede llamar:
+ * Seccion A — Riesgo Conexion (`StatusCursosPage.tsx:528-536`):
  *   - la OC esta en ejecucion (`order_status` contiene OPERACI u EJECUCI, o viene vacio)
  *   - el curso NO termino (`end_course` en el futuro, o sin fecha)
  *   - la conexion no esta completa (`pctConexion < 100`)
@@ -26,11 +26,9 @@
  *   - el `order_status` contiene `ESPERA` o `RECTIFIC`
  *   - y lleva mas de 3 dias en ese estado (`diasPendiente > 3`, `L657`)
  *
- * **B y C se MUESTRAN, no llaman.** Estan portadas para el Tablero Mock, que las dibuja como dos
- * tableros mas con su propio semaforo, editables igual que el de conexion. Ninguna de las dos
- * entra en `call-rules.ts` ni en `mock-call-trigger.ts`: llamar por telefono no mueve una DJ ni
- * una OC Final — esas se resuelven con el OTIC, no con el alumno. Ver ADR-011 y
- * docs/SEMAFORO_INTEGRACION.md §3.
+ * A y B permiten seguimiento de voz; C sigue informativa. Las reglas de llamada viven
+ * separadas de estos gates, en `call-rules.ts`. Fuente local auditada:
+ * `../semaforo-reglas-negocio/StatusCursosPage.tsx` (2026-09-11).
  */
 
 import type { OrderGroup } from './order-status-promoter.js';

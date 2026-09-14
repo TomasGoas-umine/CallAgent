@@ -784,10 +784,34 @@ body > #umine-voice-root {
    El marcador por defecto se reemplaza por uno propio para que el titulo quede
    alineado con el resto de los encabezados del panel. */
 .uv-seccion {
+  /* Un color por tablero, para distinguirlos de un vistazo. Es SOLO identidad visual: no
+     codifica criticidad ni "puede llamar" — eso lo dice el texto del resumen y la columna
+     «¿Llama?». El borde no cambia al abrir o cerrar la seccion: el unico borde que aparece al
+     abrir es el separador interno bajo el resumen, que se mantiene neutro. */
+  --uv-seccion-color: var(--uv-border);
+  --uv-seccion-glow: transparent;
+
   margin-top: 18px;
-  border: 1px solid var(--uv-border);
+  border: 1px solid var(--uv-seccion-color);
   border-radius: 10px;
   background: var(--uv-surface);
+  /* Neon: la linea nitida de 1px, un anillo tenue que la engrosa sin mover el layout, y el
+     halo exterior. Con `-4px` de spread el resplandor queda medio, no encandila. */
+  box-shadow:
+    0 0 0 1px var(--uv-seccion-glow),
+    0 0 14px -4px var(--uv-seccion-glow);
+}
+.uv-seccion--a {
+  --uv-seccion-color: #be00fe;
+  --uv-seccion-glow: rgba(190, 0, 254, 0.45);
+}
+.uv-seccion--b {
+  --uv-seccion-color: #16e3f9;
+  --uv-seccion-glow: rgba(22, 227, 249, 0.45);
+}
+.uv-seccion--c {
+  --uv-seccion-color: #007f7f;
+  --uv-seccion-glow: rgba(0, 127, 127, 0.45);
 }
 .uv-seccion > summary {
   cursor: pointer;
@@ -796,6 +820,12 @@ body > #umine-voice-root {
   font-size: 1rem;
   font-weight: 600;
   border-radius: 10px;
+  /* Fila: marcador · titulo · recuento · interruptor. Envuelve en pantallas angostas en vez
+     de empujar el interruptor fuera de la vista. */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .uv-seccion > summary::-webkit-details-marker {
   display: none;
@@ -811,6 +841,9 @@ body > #umine-voice-root {
   content: '▼';
 }
 .uv-seccion[open] > summary {
+  /* Separador INTERNO, deliberadamente neutro: el color de la seccion es el borde de afuera y
+     tiene que verse igual abierta que cerrada. Pintar tambien esta linea agrega una segunda
+     raya del mismo color y el borde deja de leerse como un contorno. */
   border-bottom: 1px solid var(--uv-border);
   border-radius: 10px 10px 0 0;
 }
@@ -892,4 +925,79 @@ body > #umine-voice-root {
 /* Adentro de la seccion el borde ya lo pone la vineta. */
 .uv-seccion__cuerpo .uv-table-wrap {
   border: none;
+}
+
+/* --- Interruptor de llamadas automaticas, uno por seccion -----------------------
+   Enciende LLAMADAS TELEFONICAS REALES, asi que tiene que verse encendido desde lejos:
+   pista en color de acento, punto desplazado y la palabra ENCENDIDAS en el mismo color.
+   Un checkbox cuadrado de 13px no comunicaba nada de eso. */
+.uv-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--uv-muted);
+  padding: 4px 10px 4px 6px;
+  border: 1px solid var(--uv-border);
+  border-radius: 999px;
+  background: var(--uv-surface-2);
+  user-select: none;
+}
+.uv-switch:hover {
+  border-color: var(--uv-border-strong);
+}
+/* El input real se mantiene en el DOM (accesible y enfocable), solo se oculta visualmente. */
+.uv-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  margin: 0;
+}
+.uv-switch__track {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--uv-border-strong);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.uv-switch__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+.uv-switch--on {
+  color: var(--uv-accent-text);
+  border-color: var(--uv-accent);
+  background: var(--uv-accent-soft);
+}
+.uv-switch--on .uv-switch__track {
+  background: var(--uv-accent);
+}
+.uv-switch--on .uv-switch__track::after {
+  transform: translateX(16px);
+}
+.uv-switch input:focus-visible + .uv-switch__track {
+  box-shadow: 0 0 0 3px var(--uv-accent-ring);
+}
+.uv-switch input:disabled + .uv-switch__track {
+  opacity: 0.5;
+}
+.uv-switch:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
 }

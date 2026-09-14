@@ -542,7 +542,7 @@ describe('GET/PATCH /api/tablero/mock', () => {
     const { app } = await buildTestApp();
     const body = (await app.inject({ method: 'GET', url: '/api/tablero/mock' })).json();
 
-    expect(body.autoCallEnabled).toBe(false);
+    expect(body.autoCallEnabled).toEqual({ A_RIESGO_CONEXION: false, B_RIESGO_DJ: false });
     // Los numeros asignables llegan con su estado resuelto; el front no los conoce de antemano.
     expect(body.telefonos.map((t: { valor: string }) => t.valor)).toEqual([
       '+56956194817',
@@ -661,6 +661,57 @@ describe('GET/PATCH /api/tablero/mock', () => {
     expect(restaurado.json().callRules).toEqual(restaurado.json().callRulesDefault);
   });
 
+  it('configurar/restaurar DJ con B encendido no llama ni cambia el semáforo y conserva A', async () => {
+    const { app, llamadasOriginadas } = await buildTestApp();
+    const endCourse = new Date(Date.now() - 4 * 86400000).toISOString().slice(0, 10);
+    const path = '/api/tablero/mock/orders/client_test_normal_s1/TEST-9104';
+    const prepared = await app.inject({
+      method: 'PATCH',
+      url: path,
+      payload: { initCourse: '2026-01-01', endCourse, conexiones: 8, djs: 2 },
+    });
+    const before = prepared
+      .json()
+      .ordenes.find((e: { order: { orderNumber: string } }) => e.order.orderNumber === 'TEST-9104');
+    expect(before.dj.nivel).toBe('ALERTA');
+    await app.inject({
+      method: 'PUT',
+      url: '/api/tablero/mock/auto-call',
+      payload: { seccion: 'B_RIESGO_DJ', enabled: true },
+    });
+    await app.inject({
+      method: 'PUT',
+      url: '/api/tablero/mock/call-rules',
+      payload: { llamarSiPctMenorA: { 2: 70 } },
+    });
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/api/tablero/mock/call-rules',
+      payload: { dj: { llamarSiDiasMayorA: 3, nivelesQueLlaman: ['ALERTA'] } },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().callRules.llamarSiPctMenorA[2]).toBe(70);
+    const after = saved
+      .json()
+      .ordenes.find((e: { order: { orderNumber: string } }) => e.order.orderNumber === 'TEST-9104');
+    expect(after.dj).toEqual(before.dj);
+    expect(after.regla.dispara).toBe(true);
+    const same = await app.inject({ method: 'PATCH', url: path, payload: { djs: 2 } });
+    expect(same.json().trigger.motivo).toBe('sin_transicion');
+    const invalid = await app.inject({
+      method: 'PUT',
+      url: '/api/tablero/mock/call-rules',
+      payload: { dj: { llamarSiDiasMayorA: -1 } },
+    });
+    expect(invalid.statusCode).toBe(400);
+    const reset = await app.inject({ method: 'POST', url: '/api/tablero/mock/call-rules/reset' });
+    expect(reset.json().callRules.dj).toEqual({
+      llamarSiDiasMayorA: 7,
+      nivelesQueLlaman: ['CRITICO'],
+    });
+    expect(llamadasOriginadas()).toBe(0);
+  });
+
   it('rechaza umbrales invalidos con 400', async () => {
     const { app } = await buildTestApp();
     const r = await app.inject({
@@ -671,14 +722,14 @@ describe('GET/PATCH /api/tablero/mock', () => {
     expect(r.statusCode).toBe(400);
   });
 
-  it('encender el toggle NO llama por si solo', async () => {
+  it('encender el toggle de una seccion NO llama por si solo, ni enciende la otra', async () => {
     const { app, llamadasOriginadas } = await buildTestApp();
     const r = await app.inject({
       method: 'PUT',
       url: '/api/tablero/mock/auto-call',
-      payload: { enabled: true },
+      payload: { seccion: 'B_RIESGO_DJ', enabled: true },
     });
-    expect(r.json().autoCallEnabled).toBe(true);
+    expect(r.json().autoCallEnabled).toEqual({ A_RIESGO_CONEXION: false, B_RIESGO_DJ: true });
     expect(llamadasOriginadas()).toBe(0);
   });
 
@@ -687,9 +738,28 @@ describe('GET/PATCH /api/tablero/mock', () => {
     const r = await app.inject({
       method: 'PUT',
       url: '/api/tablero/mock/auto-call',
-      payload: { enabled: 'si' },
+      payload: { seccion: 'A_RIESGO_CONEXION', enabled: 'si' },
     });
     expect(r.statusCode).toBe(400);
+  });
+
+  it('exige la seccion y rechaza la que no puede llamar', async () => {
+    // Sin seccion no se adivina: con dos interruptores, elegir por el operador es como se
+    // termina llamando por el criterio equivocado. Y C no llama, asi que no tiene interruptor.
+    const { app } = await buildTestApp();
+    for (const payload of [
+      { enabled: true },
+      { seccion: 'C_RECTIFICACION', enabled: true },
+      { seccion: 'otra', enabled: true },
+    ]) {
+      const r = await app.inject({
+        method: 'PUT',
+        url: '/api/tablero/mock/auto-call',
+        payload,
+      });
+      expect(r.statusCode).toBe(400);
+      expect(r.json().error).toBe('seccion_invalida');
+    }
   });
 });
 

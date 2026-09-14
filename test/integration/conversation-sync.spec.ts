@@ -26,6 +26,10 @@ import type {
   ListConversationsPage,
 } from '../../src/services/elevenlabs-conversations-client.js';
 import type { Followup } from '../../src/domain/followup.js';
+import type {
+  GetTwilioCallResult,
+  TwilioCallsClient,
+} from '../../src/services/twilio-calls-client.js';
 
 let serverHarness: DynamoServerHarness;
 
@@ -130,6 +134,38 @@ function fakeClient(detalles: ConversationDetail[]) {
     },
   };
   return { client, pedidos };
+}
+
+/**
+ * Doble de Twilio. Responde lo mismo para cualquier SID y anota que se le pregunto: alcanza para
+ * fijar que el estado final de la llamada manda sobre la heuristica de la conversacion.
+ */
+function fakeTwilio(
+  status: string,
+  durationSeconds = 0,
+): TwilioCallsClient & { consultas: string[] } {
+  const consultas: string[] = [];
+  return {
+    consultas,
+    async getCall(callSid: string): Promise<GetTwilioCallResult> {
+      consultas.push(callSid);
+      return {
+        estado: 'ok',
+        call: {
+          sid: callSid,
+          status,
+          durationSeconds,
+          answeredBy: null,
+          startedAt: new Date(INICIO_UNIX * 1000).toISOString(),
+          endedAt: new Date((INICIO_UNIX + durationSeconds) * 1000).toISOString(),
+          price: 0.014,
+          to: '+56900000001',
+          from: '+56000000000',
+          direction: 'outbound-api',
+        },
+      };
+    },
+  };
 }
 
 describe('conversation-sync', () => {
@@ -274,5 +310,94 @@ describe('conversation-sync', () => {
     expect(
       await repos.followupRepository.getCall(followup.followupId, detail.conversation_id),
     ).not.toBeNull();
+  });
+});
+
+describe('conversation-sync + estado final de Twilio', () => {
+  /** Una conversacion como la que deja ElevenLabs cuando nadie atendio: `done` y vacia. */
+  function conversacionVacia(): ConversationDetail {
+    return makeDetail({
+      call_duration_secs: 0,
+      transcript: [],
+      metadata: {
+        call_duration_secs: 0,
+        start_time_unix_secs: INICIO_UNIX,
+        phone_call: { type: 'twilio', call_sid: 'CAreal999' },
+      },
+      analysis: {},
+    });
+  }
+
+  it('una conversacion vacia con no-answer en Twilio no se cierra como contactada', async () => {
+    const repos = await freshRepos();
+    const followup = makeFollowup();
+    await repos.followupRepository.create(followup);
+    const detail = conversacionVacia();
+    await repos.followupRepository.linkConversation(detail.conversation_id, followup.followupId);
+
+    const { client } = fakeClient([detail]);
+    const twilioClient = fakeTwilio('no-answer');
+    const summary = await syncConversations(
+      {},
+      { conversationsClient: client, twilioClient, ...repos },
+    );
+
+    expect(twilioClient.consultas).toEqual(['CAreal999']);
+    expect(summary.items[0]).toMatchObject({ estado: 'registrada', twilioStatus: 'no-answer' });
+    expect(summary.twilio).toMatchObject({ consultado: true, conversacionesCruzadas: 1 });
+
+    const call = await repos.followupRepository.getCall(
+      followup.followupId,
+      detail.conversation_id,
+    );
+    expect(call?.outcome).toBe('no_answer');
+    expect(call?.twilio?.status).toBe('no-answer');
+    // Cuenta un intento y vuelve a quedar disponible, en vez de cerrarse (que es lo que pasaba).
+    expect((await repos.followupRepository.getById(followup.followupId))?.estado).toBe('READY');
+  });
+
+  it('sin cliente de Twilio el sync funciona igual que antes, y lo dice en el reporte', async () => {
+    const repos = await freshRepos();
+    const followup = makeFollowup();
+    await repos.followupRepository.create(followup);
+    const detail = conversacionVacia();
+    await repos.followupRepository.linkConversation(detail.conversation_id, followup.followupId);
+
+    const { client } = fakeClient([detail]);
+    const summary = await syncConversations({}, { conversationsClient: client, ...repos });
+
+    expect(summary.twilio.consultado).toBe(false);
+    expect(summary.twilio.motivo).toContain('TWILIO_ACCOUNT_SID');
+    expect(summary.pendientes).toEqual([]);
+    const call = await repos.followupRepository.getCall(
+      followup.followupId,
+      detail.conversation_id,
+    );
+    expect(call?.outcome).toBe('follow_up_required');
+  });
+
+  it('la segunda pasada destraba un DIALING que no tiene ninguna conversacion', async () => {
+    const repos = await freshRepos();
+    const hace2h = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const followup = makeFollowup({
+      estado: 'DIALING',
+      ultimoCallSid: 'CAsinConversacion',
+      ultimoIntentoAt: hace2h,
+      updatedAt: hace2h,
+    });
+    await repos.followupRepository.create(followup);
+
+    // ElevenLabs no tiene NADA de esta llamada: la lista viene vacia.
+    const { client } = fakeClient([]);
+    const summary = await syncConversations(
+      {},
+      { conversationsClient: client, twilioClient: fakeTwilio('busy'), ...repos },
+    );
+
+    expect(summary.total).toBe(0);
+    expect(summary.pendientes).toHaveLength(1);
+    expect(summary.pendientes[0]).toMatchObject({ estado: 'resuelta_por_twilio', outcome: 'busy' });
+    expect(summary.twilio.dialingResueltos).toBe(1);
+    expect((await repos.followupRepository.getById(followup.followupId))?.estado).toBe('READY');
   });
 });

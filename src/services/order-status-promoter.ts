@@ -31,6 +31,8 @@ import { normalizeCourseDate, normalizeTimestamp, toEpochMs } from '../utils/dat
 export const DEAD_ESTADOS = new Set(['BAJA', 'ANULADA', 'ELIMINADA', 'FACTURADA', 'FACTURADO']);
 
 export const MANUAL_ESTADOS = new Set([
+  'OCF SOLICITADA',
+  'OC RECIBIDA',
   'ESPERA OC FINAL',
   'ESPERA OC FINAL / RECTIFICACIÓN',
   'SOLICITUD OC FINAL ENVIADA',

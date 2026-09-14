@@ -1,124 +1,95 @@
-# Agente Sence — configuración conversacional
+# Agente Sence — conexión y declaraciones juradas
 
-Configurado el 2026-09-09 en el agente `agent_5201m1f6e9ccfb6t5gafcw2azzrk`, rama Main
-`agtbrch_4001m1f6eapce618c4vn02zecdzx`. Versión verificada por GET:
-`agtvrsn_0501m23xb1eve5x91xhkj2wt541t`.
+Actualizado y verificado por GET el **2026-09-11** en el agente
+`agent_5201m1f6e9ccfb6t5gafcw2azzrk`, rama Main `agtbrch_4001m1f6eapce618c4vn02zecdzx`,
+versión `agtvrsn_1101m28nmpace7nrzbcq9gsa44na`.
 
 [Abrir workflow en ElevenLabs](https://elevenlabs.io/app/agents/agents/agent_5201m1f6e9ccfb6t5gafcw2azzrk/workflow?branchId=agtbrch_4001m1f6eapce618c4vn02zecdzx).
 
-## Fuente y alcance
+## Capacidad y decisión
 
-`scripts/lib/sence-agent-config.ts` contiene el prompt general, las instrucciones por etapa,
-las condiciones de transición y el análisis post-llamada. `buildSenceAgentPatch()` genera un
-objeto de configuración sin efectos externos; importar el módulo no modifica ElevenLabs.
-El agente tiene 15 nodos y 60 conexiones, dos de ellas bidireccionales. El prompt general
-establece identidad, contexto y límites; cada nodo agrega su objetivo conversacional.
+La revisión del agente remoto confirmó que solo admitía `riesgo_conexion_critico`. No bastaba
+con conectar el tablero B: el workflow habría derivado el motivo desconocido a revisión humana.
+Se amplió el mismo agente porque identificación, diagnóstico, soporte, acuerdo y cierre son
+compartidos; otro agente habría duplicado esas instrucciones y su mantenimiento.
 
-El workflow implementa la parte conversacional del flujo 2 y produce evidencia para los
-flujos 3 y 4. La selección, revalidación, horarios, cuotas, persistencia y bloqueo de reintentos
-siguen en el backend. El único motivo originado actualmente es `riesgo_conexion_critico`.
-Un motivo desconocido o contexto incompleto llevan a revisión humana; agregar una nueva
-campaña requiere definir su objetivo y habilitarla expresamente en el backend.
+La configuración versionable vive en `scripts/lib/sence-agent-config.ts`. Tiene **16 nodos**:
+se agregó únicamente `contexto_dj`. Después de confirmar identidad, el motivo decide si se entra
+a contexto de conexión o a contexto DJ; luego se reutiliza el flujo común. El prompt general pasó
+de **5.107 a 5.211 caracteres (+2%)**. Las instrucciones específicas de DJ viven en su etapa.
+Ver [ADR-012](DECISIONS.md#adr-012--un-agente-dos-motivos-conexión-y-declaraciones-juradas).
 
-## Etapas y salidas
+| Motivo                    | Objetivo                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| `riesgo_conexion_critico` | Revisar participación pendiente del curso y recoger una acción/plazo.                       |
+| `riesgo_dj_critico`       | Revisar declaraciones juradas pendientes de un curso terminado con el contacto responsable. |
+| Otros                     | Revisión humana; no convertirlos en riesgo de conexión.                                     |
 
-| Etapa                       | Comportamiento                                                                                 |
-| --------------------------- | ---------------------------------------------------------------------------------------------- |
-| Identificación              | Confirma persona o rol antes de revelar empresa, curso o situación.                            |
-| Contexto                    | Usa motivo y datos de la llamada; no supone falta de conexión si los datos son inconsistentes. |
-| Diagnóstico                 | Distingue desconocimiento, coordinación, acceso, problema administrativo y otras situaciones.  |
-| Soporte                     | Recoge el error sin credenciales; bloqueo persistente se deriva a revisión humana.             |
-| Acuerdo                     | Recoge acción y plazo explícitos; no confunde una preferencia de llamada con resolución.       |
-| Capacitación futura         | Recoge interés espontáneo, sin ofrecer precios, matrícula ni fechas.                           |
-| Cierre de acuerdo           | Resume el compromiso sin afirmar que el registro ya se completó.                               |
-| Ya resuelto                 | Acepta el reporte de la persona, advierte posible desfase y no insiste.                        |
-| Reagendar                   | Recoge una preferencia, sin confirmar una cita ni programar llamadas.                          |
-| Contacto ausente/equivocado | Cierra sin revelar datos ni pedir teléfonos de terceros.                                       |
-| Humano                      | Deja solicitud para revisión sin prometer transferencia en vivo o notificación.                |
-| No contactar                | Reconoce rechazo permanente y termina sin persuadir.                                           |
-| Cierre pendiente            | Resume solo lo obtenido, sin inventar compromisos.                                             |
-| Inicio y fin                | Entrada y terminación del grafo.                                                               |
+Para B, tener conexión al 100% es válido y **no demuestra que las declaraciones estén completas**.
+El agente no pide volver a conectarse, firmar por terceros ni entregar documentos o credenciales
+por teléfono. No inventa pasos de plataforma, enlaces, sanciones ni plazos legales. Si la gestión
+depende del OTIC, una validación administrativa o un bloqueo persistente, deja revisión humana.
 
-Las etapas activas tienen salidas prioritarias para buzón, rechazo permanente, humano,
-contacto incorrecto y falta de disponibilidad. Las conexiones de retorno permiten volver
-de soporte o de capacitación futura al acuerdo. El interés o error ya recogidos no deben
-provocar bucles. `end_call`, `skip_turn` y `voicemail_detection` están habilitadas; el buzón
-se termina sin dejar mensaje.
+## Datos y resultados
 
-## Variables y análisis
+Las ocho variables de `src/services/agent-variables.ts` son `nombre_interlocutor`, `nombre_cliente`,
+`nombre_curso`, `motivo`, `dias_restantes`, `pct_conexion`, `orden_compra` y `dj_pendientes`.
+La última es conectados menos DJ, releída al marcar; se envía vacía en A. Los datos faltantes
+siguen vacíos/`NO_DISPONIBLE`. Una llamada B necesita curso, días restantes negativos y DJ
+pendientes positivas; un contexto inconsistente lleva a revisión, sin inventar una incidencia.
 
-Las siete variables coinciden con `src/services/agent-variables.ts`: `nombre_interlocutor`,
-`nombre_cliente`, `nombre_curso`, `motivo`, `dias_restantes`, `pct_conexion`, `orden_compra`.
-Los valores predeterminados no representan a una persona ni curso real: los datos faltantes
-se reconocen como `NO_DISPONIBLE` o cadena vacía y no se inventan. El porcentaje y la orden
-son referencias internas que el agente no debe pronunciar.
+Se conservan los cinco campos del análisis post-call:
 
-Los cinco campos de extracción coinciden con el clasificador existente:
+| Campo                           | Contrato                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `motivo_no_conexion`            | Clave histórica: causa del motivo original, también DJ. Rechazo permanente usa `no_contactar`. |
+| `tiene_bloqueo_tecnico`         | Booleano; bloqueo que persiste al cierre.                                                      |
+| `compromiso_fecha`              | Plazo aceptado junto con una acción; otra llamada no cuenta.                                   |
+| `requiere_humano`               | Booleano; petición explícita o límite de atribuciones.                                         |
+| `necesidad_capacitacion_futura` | Solo interés espontáneo.                                                                       |
 
-| Campo                           | Tipo y significado                                                                      |
-| ------------------------------- | --------------------------------------------------------------------------------------- |
-| `motivo_no_conexion`            | Texto; rechazo permanente usa exactamente `no_contactar`.                               |
-| `tiene_bloqueo_tecnico`         | Booleano; true solo para bloqueo que persiste al cierre.                                |
-| `compromiso_fecha`              | Texto; vacío si falta acción y plazo aceptados. Otra llamada no cuenta como compromiso. |
-| `requiere_humano`               | Booleano; solicitud de humano, límite de atribuciones o bloqueo que necesita soporte.   |
-| `necesidad_capacitacion_futura` | Texto; vacío si no hubo interés espontáneo.                                             |
+El único criterio de evaluación sigue siendo `objetivo_resuelto`. En B, haber conectado a los
+participantes no resuelve las DJ. Se necesita reporte de declaraciones completas o acción con
+plazo para ellas. RESUELTO significa resolución del seguimiento, no verificación en SENCE.
+Las solicitudes simultáneas de humano y no contactar conservan ESCALADO y CONTACT.doNotCall.
 
-El único criterio de evaluación es `objetivo_resuelto`. No agregar criterios independientes
-de cortesía sin revisar el clasificador: actualmente todos los criterios en success pueden
-cerrar el seguimiento como RESUELTO. La resolución es del seguimiento, no una verificación
-de acreditación en SENCE. Los campos sin evidencia no se deben rellenar con ejemplos.
+## Integración y verificación
 
-Si pide humano y no volver a llamar, el webhook conserva ESCALADO y marca CONTACT.doNotCall
-en paralelo. Este ajuste local requiere que el servidor cargue el código actualizado.
+`readCallSemaforo` incluye A y B para el evaluador, `/api/tablero` y la revalidación. El Mock
+presenta B con «¿Llama?» y usa el mismo trigger y dispatcher que A. B conserva su gate y usa sus umbrales de llamada configurables (por defecto, más de siete
+días y CRITICO); los ajustes de A no la afectan. C sigue sin originar llamadas. El seguimiento
+conserva la sección original para que un cambio de fechas no cambie silenciosamente su motivo.
 
-## Verificación y mantenimiento
+Se verificaron selección, conexión completa con DJ pendientes, preview y payload HTTP,
+cancelación si las DJ se completan antes de marcar, no reconvertir A a B, control de repetición,
+consentimiento, cuota, kill switch y resultados post-call. Las siete pruebas en ElevenLabs
+pasaron contra la configuración propuesta: cuatro transiciones y tres simulaciones de texto
+(compromiso, DJ entregadas y rechazo permanente). Después se aplicó el PATCH a Main y se verificó
+por GET que prompt, etapas, transiciones, variables y análisis coinciden.
 
-Se validó el esquema del grafo, correspondencia de variables, alcanzabilidad y salidas de
-todos los nodos, prioridad de rechazo y contrato de extracción. Se verificó por GET que la
-API guardó las herramientas, los campos y el criterio. La API convirtió los campos de análisis
-a sus referencias nativas (`analysis_items`) conservando sus identificadores de extracción.
-Se conservaron voz, modelo conversacional, configuración de turnos, privacidad, autenticación,
-límites y webhooks existentes.
+Se preservaron voz, modelo, temperatura, turnos, herramientas externas, base de conocimiento,
+privacidad, autenticación, límites y configuración de webhooks. Evidencia resumida:
+[elevenlabs-dj-validation.json](elevenlabs-dj-validation.json).
 
-Las tres pruebas de transición ejecutadas en ElevenLabs pasaron: identificación a contexto,
-diagnóstico a soporte y acuerdo a cierre. Quedaron guardadas en la biblioteca de pruebas de
-ElevenLabs bajo nombres que comienzan con `Umine workflow:`. Las simulaciones de texto
-comprobaron extracción de rechazo de contactos, reporte de resolución y bloqueo técnico.
-El compromiso con fecha se validó con un historial controlado que contiene la aceptación
-explícita. Las simulaciones generales no reportan el nodo recorrido; para las transiciones
-se usó la API específica de pruebas de workflow. Evidencia resumida sin credenciales:
-[elevenlabs-validation.json](elevenlabs-validation.json).
+**No se realizaron llamadas telefónicas.** Falta comprobar voz y entrega del webhook con el
+servidor/túnel en ejecución; la integración local se probó con proveedor simulado y DynamoDB local.
+Pruebas sugeridas: [PRUEBAS_MANUALES_AGENTE.md](../PRUEBAS_MANUALES_AGENTE.md#criterio-b--declaraciones-juradas-2026-09-11).
 
-Pasaron 23 pruebas locales (13 unitarias y 10 del webhook con DynamoDB local), compilación
-TypeScript y lint de los archivos cambiados. No se realizaron llamadas telefónicas; falta
-validación de voz y del ciclo completo con el backend en ejecución.
+## Mantenimiento
 
 ```bash
-npm run build
-npx vitest run test/unit/sence-agent-config.spec.ts test/unit/call-outcome-classifier.spec.ts test/integration/elevenlabs-post-call-webhook.spec.ts
+npm run agent:check
+# Requiere ELEVENLABS_AGENT_BRANCH_ID explícito. Sin --apply solo prepara una vista previa.
+npm run agent:configure
+npm run agent:configure -- --apply
 ```
 
-Para actualizar de nuevo: leer la rama indicada con GET, respaldar su versión, construir el
-objeto con `buildSenceAgentPatch()`, combinar únicamente sus campos con la configuración
-vigente y aplicar PATCH a la misma rama. Verificar que la versión no cambió entre lectura
-y escritura y comprobar el resultado con un nuevo GET. No enviar referencias vacías de
-`analysis_items` junto con cambios de extracción. No incluir claves API en archivos versionados.
+`agent-configure` lee la rama, guarda respaldo privado y patch en un directorio temporal,
+comprueba que la versión no cambió y aplica solo la configuración conversacional versionada.
+El respaldo de esta actualización está en `/tmp/umine-agent-8WOeza/before.json` (0600),
+y la verificación en `verified.json`. La versión previa es
+`agtvrsn_1601m26702v8fzhrj4z5e9h372t3`. Los temporales no forman parte del repositorio.
 
-El respaldo privado de esta sesión está en `/tmp/umine-agent-config/before.json` (permisos
-0600); las respuestas aplicada y verificada están en `after.json` y `verified.json`. Estos
-archivos temporales no forman parte del repositorio. La versión anterior es
-`agtvrsn_7201m1hza033etxb0qq0j3j1wf6g`, disponible para comparación o restauración en ElevenLabs.
-
-## Límites del sistema existente
-
-- Una preferencia de horario queda en el análisis y transcripción; no existe agenda automática.
-- La revisión humana conserva evidencia y estado ESCALADO; no hay transferencia telefónica
-  ni notificación a PMO implementada por este workflow.
-- La reconciliación por timeout y la clasificación real de no contestadas siguen siendo
-  pendientes documentados en el proyecto. Finalizar un buzón en ElevenLabs no corrige por sí
-  solo la taxonomía de estados del proveedor en el backend.
-- La entrega post-call depende del webhook y URL pública previamente configurados. Cambiar
-  el workflow no despliega el backend ni mantiene vivo el túnel local.
-
-Referencias: [Workflows](https://elevenlabs.io/docs/eleven-agents/customization/agent-workflows),
-[actualizar agente](https://elevenlabs.io/docs/api-reference/agents/update).
+Referencias de API: [actualizar agente](https://elevenlabs.io/docs/api-reference/agents/update),
+[variables dinámicas](https://elevenlabs.io/docs/eleven-agents/customization/personalization/dynamic-variables),
+[pruebas del agente](https://elevenlabs.io/docs/eleven-agents/customization/agent-testing).

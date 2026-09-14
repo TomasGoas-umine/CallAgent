@@ -25,11 +25,9 @@ import { IdempotencyRepository } from '../repositories/idempotency-repository.js
 import { QuotaRepository, type QuotaSnapshot } from '../repositories/quota-repository.js';
 import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
-import { MOTIVO_RIESGO_CONEXION } from '../domain/followup.js';
+import { motivoDeSeccion, type CallSection } from '../domain/followup.js';
 import type { Followup } from '../domain/followup.js';
 import type { TableroApiClient } from './tablero-api-client.js';
-
-const MOTIVO = MOTIVO_RIESGO_CONEXION;
 
 /**
  * Namespace para la idempotency key del disparo manual. La key la elige el cliente (header
@@ -59,6 +57,7 @@ export type ManualCallStatus =
   | 'no_originada';
 
 export interface ManualCallInput {
+  seccion?: CallSection;
   clientId: string;
   orderNumber: string;
   /**
@@ -123,7 +122,12 @@ export async function originateManualCall(
   }
 
   // --- Revalidacion contra el Semaforo (mismo modulo que usa el dispatcher) ---
-  const evaluation = await findCourseEvaluation(tableroClient, input.clientId, input.orderNumber);
+  const evaluation = await findCourseEvaluation(
+    tableroClient,
+    input.clientId,
+    input.orderNumber,
+    input.seccion,
+  );
   if (!evaluation) {
     return {
       status: 'curso_no_encontrado',
@@ -212,7 +216,7 @@ export async function originateManualCall(
   const nowIso = (deps.now ?? new Date()).toISOString();
   const followup: Followup = {
     followupId,
-    motivo: MOTIVO,
+    motivo: motivoDeSeccion(evaluation.seccion),
     prioridad: 'ALTA',
     estado: 'READY',
     destinatarioId: evaluation.group.clientId,
@@ -234,7 +238,7 @@ export async function originateManualCall(
       initCourse: evaluation.group.initCourse,
       endCourse: evaluation.group.endCourse,
       nivelDetectado: evaluation.nivel,
-      seccion: 'A_RIESGO_CONEXION',
+      seccion: evaluation.seccion ?? 'A_RIESGO_CONEXION',
     },
   };
   await followupRepository.create(followup);

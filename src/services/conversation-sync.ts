@@ -9,9 +9,22 @@
  * tambien sirve de red de seguridad cuando el webhook si esta configurado pero se perdio una
  * entrega (es la reconciliacion pendiente de UV-030).
  *
- * NO origina llamadas: solo hace GET contra ElevenLabs. Y no se dispara solo — lo llama una
- * persona, por `npm run calls:sync` o por el boton del micrositio (regla 0 de CLAUDE.md: sin
- * cron, sin scheduler, sin polling).
+ * NO origina llamadas: solo hace GET contra ElevenLabs y contra Twilio. Y no se dispara solo —
+ * lo llama una persona, por `npm run calls:sync` o por el boton del micrositio (regla 0 de
+ * CLAUDE.md: sin cron, sin scheduler, sin polling).
+ *
+ * Son DOS pasadas, y la segunda existe porque la primera tiene un punto ciego:
+ *
+ *   1. Por CONVERSACION (ElevenLabs). Cuando se puede, se le pregunta ademas a Twilio como
+ *      termino esa misma llamada: su `data.status` nunca dice `no-answer` ni `busy` (UV-053), asi
+ *      que una llamada que nadie atendio llegaba al clasificador como conversacion vacia y se
+ *      cerraba como `contacted` -> CERRADO. Twilio si lo sabe.
+ *   2. Por FOLLOWUP en DIALING (`services/dialing-reconciler`). Las llamadas que no dejan
+ *      NINGUNA conversacion no aparecen en la pasada 1 por definicion, y su seguimiento se
+ *      quedaba en DIALING para siempre.
+ *
+ * Las dos pasadas son opcionales en lo que toca a Twilio: sin `TWILIO_ACCOUNT_SID`/
+ * `TWILIO_AUTH_TOKEN` el sync hace exactamente lo que hacia antes, y lo dice en el reporte.
  *
  * Como decide a que FOLLOWUP pertenece cada conversacion, en este orden:
  *
@@ -31,6 +44,7 @@ import {
   toPostCallPayload,
 } from './elevenlabs-conversations-client.js';
 import { esConversacionFinal, recordCallResult } from './call-result-recorder.js';
+import { reconcileDialingFollowups, type ReconcileItemResult } from './dialing-reconciler.js';
 import { FollowupRepository } from '../repositories/followup-repository.js';
 import { ContactRepository } from '../repositories/contact-repository.js';
 import { logger } from '../utils/logger.js';
@@ -39,6 +53,7 @@ import type {
   ConversationSummary,
   ConversationsClient,
 } from './elevenlabs-conversations-client.js';
+import type { TwilioCallSnapshot, TwilioCallsClient } from './twilio-calls-client.js';
 
 export type SyncItemEstado =
   'registrada' | 'ya_registrada' | 'no_final' | 'no_atribuible' | 'error';
@@ -54,6 +69,8 @@ export interface SyncItemResult {
   via?: 'conversation_link' | 'user_id' | 'forzada';
   startedAt?: string | null;
   durationSeconds?: number | null;
+  /** Estado final que reporto Twilio para esta llamada, si se pudo consultar. */
+  twilioStatus?: string;
 }
 
 export interface SyncSummary {
@@ -64,10 +81,31 @@ export interface SyncSummary {
   noAtribuibles: number;
   errores: number;
   items: SyncItemResult[];
+  /**
+   * Resultado de la segunda pasada: los FOLLOWUP que estaban en DIALING, resueltos contra el
+   * estado final de Twilio. Vacio si no hay credenciales de Twilio (y entonces `twilio.motivo`
+   * dice por que).
+   */
+  pendientes: ReconcileItemResult[];
+  /** Que se pudo hacer con Twilio en esta corrida. Es informativo, para el reporte. */
+  twilio: {
+    consultado: boolean;
+    /** Cuando no se consulto: por que. */
+    motivo?: string;
+    /** Cuantas conversaciones de la pasada 1 se pudieron cruzar con su llamada de Twilio. */
+    conversacionesCruzadas: number;
+    /** Cuantos FOLLOWUP en DIALING se cerraron con el estado final de Twilio. */
+    dialingResueltos: number;
+  };
 }
 
 export interface ConversationSyncDeps {
   conversationsClient: ConversationsClient;
+  /**
+   * Lector de estado final de Twilio. Opcional a proposito: sin el (sin credenciales) el sync
+   * funciona como antes, solo que sin poder distinguir una no contestada ni destrabar un DIALING.
+   */
+  twilioClient?: TwilioCallsClient | null;
   followupRepository?: FollowupRepository;
   contactRepository?: ContactRepository;
 }
@@ -79,6 +117,14 @@ export interface SyncOptions {
   sinceUnixSecs?: number;
   /** Tope de conversaciones a revisar, por si el historial creciera mucho. */
   maxConversaciones?: number;
+  /**
+   * Saltea la segunda pasada (FOLLOWUP en DIALING contra Twilio). Util para una corrida rapida
+   * que solo quiere traer conversaciones nuevas.
+   */
+  omitirPendientes?: boolean;
+  /** Minutos de gracia antes de considerar "colgado" un DIALING recien disparado. */
+  graciaMinutos?: number;
+  now?: Date;
 }
 
 const PAGE_SIZE = 100;
@@ -111,6 +157,40 @@ async function listarTodas(
 }
 
 /**
+ * El `call_sid` de Twilio que trae la conversacion. En los payloads reales viaja en
+ * `metadata.phone_call.call_sid`; los fixtures y el mock lo ponen plano en `metadata.call_sid`.
+ */
+function callSidDe(detail: ConversationDetail): string | null {
+  return detail.metadata?.phone_call?.call_sid ?? detail.metadata?.call_sid ?? null;
+}
+
+/**
+ * Como termino esta misma llamada segun Twilio, o `null` si no se puede saber (sin credenciales,
+ * sin `call_sid`, o Twilio no la conoce).
+ *
+ * Un fallo consultando Twilio NUNCA voltea el sync: se registra el resultado igual, con la
+ * clasificacion de siempre. Perder el dato de Twilio degrada la precision; abortar perderia la
+ * conversacion entera.
+ */
+async function consultarTwilio(
+  detail: ConversationDetail,
+  client: TwilioCallsClient | null | undefined,
+): Promise<TwilioCallSnapshot | null> {
+  if (!client) return null;
+  const callSid = callSidDe(detail);
+  if (!callSid) return null;
+
+  const res = await client.getCall(callSid);
+  if (res.estado === 'ok') return res.call;
+  logger.warn('conversation_sync_twilio_no_consultado', {
+    conversationId: detail.conversation_id,
+    callSid,
+    motivo: res.estado === 'no_encontrada' ? 'no_encontrada_en_esta_cuenta' : res.motivo,
+  });
+  return null;
+}
+
+/**
  * Procesa UNA conversacion ya atribuida. Devuelve el item del reporte.
  * Toda la logica de negocio (clasificar, persistir, mover estado) vive en `call-result-recorder`.
  */
@@ -118,10 +198,13 @@ async function registrar(
   detail: ConversationDetail,
   followupId: string,
   via: NonNullable<SyncItemResult['via']>,
-  deps: Required<Pick<ConversationSyncDeps, 'followupRepository' | 'contactRepository'>>,
+  deps: Required<Pick<ConversationSyncDeps, 'followupRepository' | 'contactRepository'>> & {
+    twilioClient?: TwilioCallsClient | null;
+  },
 ): Promise<SyncItemResult> {
+  const twilio = await consultarTwilio(detail, deps.twilioClient);
   const resultado = await recordCallResult(
-    { followupId, payload: toPostCallPayload(detail), fuente: 'sync' },
+    { followupId, payload: toPostCallPayload(detail), fuente: 'sync', twilio },
     deps,
   );
 
@@ -133,6 +216,7 @@ async function registrar(
       ? new Date(detail.metadata.start_time_unix_secs * 1000).toISOString()
       : null,
     durationSeconds: detail.metadata?.call_duration_secs ?? null,
+    ...(twilio ? { twilioStatus: twilio.status } : {}),
     estado: 'registrada',
   };
 
@@ -149,7 +233,7 @@ export async function syncConversations(
 ): Promise<SyncSummary> {
   const followupRepository = deps.followupRepository ?? new FollowupRepository();
   const contactRepository = deps.contactRepository ?? new ContactRepository();
-  const repos = { followupRepository, contactRepository };
+  const repos = { followupRepository, contactRepository, twilioClient: deps.twilioClient };
 
   const conversaciones = await listarTodas(deps.conversationsClient, options);
   const items: SyncItemResult[] = [];
@@ -242,6 +326,17 @@ export async function syncConversations(
     }
   }
 
+  // --- Pasada 2: los FOLLOWUP que quedaron en DIALING ---
+  // No aparecen arriba por definicion: no hay conversacion que listar. Se resuelven con el
+  // estado final de Twilio, que es el unico que sabe si el telefono llego a sonar.
+  const pendientes =
+    deps.twilioClient && !options.omitirPendientes
+      ? await reconcileDialingFollowups(
+          { twilioClient: deps.twilioClient, followupRepository, contactRepository },
+          { graciaMinutos: options.graciaMinutos, now: options.now },
+        )
+      : [];
+
   const cuenta = (estado: SyncItemEstado) => items.filter((i) => i.estado === estado).length;
   const summary: SyncSummary = {
     total: items.length,
@@ -251,6 +346,21 @@ export async function syncConversations(
     noAtribuibles: cuenta('no_atribuible'),
     errores: cuenta('error'),
     items,
+    pendientes,
+    twilio: {
+      consultado: Boolean(deps.twilioClient),
+      ...(deps.twilioClient
+        ? options.omitirPendientes
+          ? { motivo: 'segunda pasada omitida por pedido explicito' }
+          : {}
+        : {
+            motivo:
+              'sin TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN: no se puede distinguir una llamada no ' +
+              'contestada ni destrabar un seguimiento en DIALING',
+          }),
+      conversacionesCruzadas: items.filter((i) => i.twilioStatus).length,
+      dialingResueltos: pendientes.filter((p) => p.estado === 'resuelta_por_twilio').length,
+    },
   };
   logger.info('conversation_sync_completado', {
     total: summary.total,
@@ -258,6 +368,8 @@ export async function syncConversations(
     yaRegistradas: summary.yaRegistradas,
     noAtribuibles: summary.noAtribuibles,
     errores: summary.errores,
+    pendientesRevisados: pendientes.length,
+    dialingResueltos: summary.twilio.dialingResueltos,
   });
   return summary;
 }
@@ -289,5 +401,9 @@ export async function syncConversacionForzada(
 
   await followupRepository.linkConversation(conversationId, followupId);
   logger.warn('conversation_sync_atribucion_forzada', { conversationId, followupId });
-  return registrar(detail, followupId, 'forzada', { followupRepository, contactRepository });
+  return registrar(detail, followupId, 'forzada', {
+    followupRepository,
+    contactRepository,
+    twilioClient: deps.twilioClient,
+  });
 }

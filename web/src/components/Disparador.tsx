@@ -148,6 +148,7 @@ export function Disparador({
       const respuesta = await api.disparar({
         clientId: curso.clientId,
         orderNumber: curso.orderNumber,
+        seccion: curso.seccion,
         phone: numero,
         requestedBy: operador.trim() || undefined,
         idempotencyKey,
@@ -189,7 +190,8 @@ export function Disparador({
                 key={`${c.clientId}#${c.orderNumber}`}
                 value={`${c.clientId}#${c.orderNumber}`}
               >
-                {c.orderNumber} · {c.clientName} · {c.pctConexion}% ·{' '}
+                {c.orderNumber} · {c.clientName} ·{' '}
+                {c.dj ? 'Declaraciones juradas' : `${c.pctConexion}% conexion`} ·{' '}
                 {c.diasRestantes === undefined ? 'sin fecha' : `${c.diasRestantes}d`}
               </option>
             ))}
@@ -291,15 +293,17 @@ export function Disparador({
           <div className="uv-kv">
             <span className="uv-kv__k">Urgencia</span>
             <span>
-              <NivelBadge nivel={curso.nivel} /> semana {curso.semana}
+              <NivelBadge nivel={curso.nivel} /> {curso.dj ? 'Riesgo DJ' : `semana ${curso.semana}`}
             </span>
             <span className="uv-kv__k">Cliente</span>
             <span>{curso.clientName}</span>
             <span className="uv-kv__k">Curso</span>
             <span>{curso.courseName}</span>
-            <span className="uv-kv__k">Conexion</span>
+            <span className="uv-kv__k">{curso.dj ? 'Declaraciones juradas' : 'Conexion'}</span>
             <span>
-              {curso.pctConexion}% ({curso.conectados}/{curso.inscritos} alumnos)
+              {curso.dj
+                ? `${curso.dj.pendientes} pendientes · ${curso.dj.diasDesdeCierre} dias desde el cierre`
+                : `${curso.pctConexion}% (${curso.conectados}/${curso.inscritos} alumnos)`}
             </span>
             <span className="uv-kv__k">Contacto del Semaforo</span>
             <span>

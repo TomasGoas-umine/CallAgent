@@ -4,10 +4,15 @@
  */
 
 /**
- * Unico motivo en alcance del MVP (prompt §5.1: Seccion A - Riesgo Conexion - CRITICO).
+ * Motivos de voz admitidos (ADR-012): conexión y declaraciones juradas.
  * Estaba repetido como constante local en candidate-evaluator y manual-call.
  */
 export const MOTIVO_RIESGO_CONEXION = 'riesgo_conexion_critico';
+export const MOTIVO_RIESGO_DJ = 'riesgo_dj_critico';
+export type CallSection = 'A_RIESGO_CONEXION' | 'B_RIESGO_DJ';
+export function motivoDeSeccion(seccion: CallSection = 'A_RIESGO_CONEXION'): string {
+  return seccion === 'B_RIESGO_DJ' ? MOTIVO_RIESGO_DJ : MOTIVO_RIESGO_CONEXION;
+}
 
 export type FollowupEstado =
   | 'READY'
@@ -44,6 +49,21 @@ export interface Followup {
   origen?: 'manual' | 'automatico';
   /** Quien disparo la llamada, cuando `origen === 'manual'`. Traza para auditoria. */
   requestedBy?: string;
+  /**
+   * SID de Twilio del ultimo intento saliente, tal como lo devolvio ElevenLabs al originar.
+   *
+   * Es lo unico que permite averiguar que paso con una llamada que NO dejo conversacion en
+   * ElevenLabs (nadie atendio, el carrier rechazo, permisos geo). Sin esto el FOLLOWUP se
+   * quedaba en DIALING para siempre: `conversation-sync` recorre conversaciones, y de esas no
+   * hay ninguna. Ver `services/dialing-reconciler.ts`.
+   *
+   * Opcional: los FOLLOWUP creados antes de que se persistiera no lo tienen.
+   */
+  ultimoCallSid?: string | null;
+  /** `conversation_id` del ultimo intento. Permite pedir esa conversacion directo, sin listar. */
+  ultimaConversationId?: string | null;
+  /** Cuando se origino el ultimo intento. Es el reloj del periodo de gracia del reconciliador. */
+  ultimoIntentoAt?: string | null;
   /** Contexto necesario para revalidar y para construir dynamic_variables del agente. */
   contexto: {
     clientId: string;
@@ -53,7 +73,7 @@ export interface Followup {
     initCourse: string;
     endCourse: string;
     nivelDetectado: 'CRITICO' | 'ALERTA' | 'NORMAL';
-    seccion: 'A_RIESGO_CONEXION';
+    seccion: CallSection;
   };
 }
 
@@ -93,11 +113,25 @@ export interface FollowupCall {
    */
   terminationReason?: string | null;
   /**
-   * Como llego este resultado: `webhook` (ElevenLabs lo entrego) o `sync` (lo fue a buscar
-   * `conversation-sync` contra la API). Importa para depurar: si todo dice `sync`, el webhook
-   * no esta entregando.
+   * Como llego este resultado: `webhook` (ElevenLabs lo entrego), `sync` (lo fue a buscar
+   * `conversation-sync` contra la API de ElevenLabs) o `twilio` (no hubo conversacion y lo
+   * resolvio `dialing-reconciler` con el estado final de Twilio). Importa para depurar: si todo
+   * dice `sync`, el webhook no esta entregando.
    */
-  fuente?: 'webhook' | 'sync';
+  fuente?: 'webhook' | 'sync' | 'twilio';
+  /**
+   * Estado final que reporto Twilio para esta misma llamada, cuando se pudo consultar. Es la
+   * evidencia dura de si el telefono llego a sonar y a ser atendido — ElevenLabs no la tiene
+   * (UV-053) — y queda persistida para poder auditar una clasificacion y para calibrar.
+   */
+  twilio?: {
+    status: string;
+    answeredBy: string | null;
+    durationSeconds: number | null;
+    startedAt: string | null;
+    endedAt: string | null;
+    price: number | null;
+  } | null;
 }
 
 /** Todos los estados posibles — usado para listar followups sin depender de un `scan`. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultCallRules,
+  evaluarReglaDj,
   evaluarReglaDeLlamada,
   validarCallRules,
 } from '../../src/services/call-rules.js';
@@ -83,5 +84,53 @@ describe('validarCallRules', () => {
   it('rechaza un cuerpo que no es objeto', () => {
     expect(validarCallRules(null).ok).toBe(false);
     expect(validarCallRules('nope').ok).toBe(false);
+  });
+});
+
+describe('reglas configurables de llamada DJ', () => {
+  it('cambia la decisión de llamada para ALERTA sin reclasificarla', () => {
+    const config = { llamarSiDiasMayorA: 3, nivelesQueLlaman: ['ALERTA'] as const };
+    expect(evaluarReglaDj(true, 'ALERTA', 5).dispara).toBe(false);
+    expect(
+      evaluarReglaDj(true, 'ALERTA', 5, {
+        ...config,
+        nivelesQueLlaman: [...config.nivelesQueLlaman],
+      }).dispara,
+    ).toBe(true);
+    expect(
+      evaluarReglaDj(true, 'CRITICO', 10, { llamarSiDiasMayorA: 12, nivelesQueLlaman: ['CRITICO'] })
+        .dispara,
+    ).toBe(false);
+  });
+  it('respeta el borde estricto, la desactivación y el gate', () => {
+    expect(
+      evaluarReglaDj(true, 'CRITICO', 12, { llamarSiDiasMayorA: 12, nivelesQueLlaman: ['CRITICO'] })
+        .dispara,
+    ).toBe(false);
+    expect(
+      evaluarReglaDj(true, 'CRITICO', 13, { llamarSiDiasMayorA: 12, nivelesQueLlaman: ['CRITICO'] })
+        .dispara,
+    ).toBe(true);
+    expect(
+      evaluarReglaDj(true, 'CRITICO', 40, {
+        llamarSiDiasMayorA: null,
+        nivelesQueLlaman: ['CRITICO'],
+      }).dispara,
+    ).toBe(false);
+    expect(evaluarReglaDj(false, 'CRITICO', 40).dispara).toBe(false);
+  });
+  it.each([-1, 1.5, NaN, Infinity, '3', {}, []])('rechaza el umbral DJ inválido %s', (v) => {
+    expect(validarCallRules({ dj: { llamarSiDiasMayorA: v } }).ok).toBe(false);
+  });
+  it.each([[], ['OTRO'], 'CRITICO', null])('rechaza niveles DJ inválidos %s', (niveles) => {
+    expect(validarCallRules({ dj: { nivelesQueLlaman: niveles } }).ok).toBe(false);
+  });
+  it('los cambios parciales de B conservan A y permiten restaurar/desactivar B', () => {
+    const current = defaultCallRules();
+    current.llamarSiPctMenorA[2] = 70;
+    const result = validarCallRules({ dj: { llamarSiDiasMayorA: null } }, current);
+    expect(result.ok && result.rules.llamarSiPctMenorA[2]).toBe(70);
+    expect(result.ok && result.rules.dj.llamarSiDiasMayorA).toBeNull();
+    expect(current.dj.llamarSiDiasMayorA).toBe(7);
   });
 });

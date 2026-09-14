@@ -83,6 +83,44 @@ export class FollowupRepository extends BaseRepository {
     );
   }
 
+  /**
+   * Deja anotado en el FOLLOWUP con que llamada saliente se intento: el `conversation_id` de
+   * ElevenLabs y el `call_sid` de Twilio.
+   *
+   * Sin el `call_sid` no hay forma de averiguar que paso con una llamada que no dejo
+   * conversacion: el item `CONVERSATION#<id> META` resuelve conversacion -> followup, pero si
+   * nunca hubo conversacion no hay por donde empezar. Se escribe SIN condicion a proposito —
+   * el gate anti doble disparo ya lo hizo `markDialing`, y este write no debe poder fallar
+   * despues de haber gastado un minuto real de llamada.
+   */
+  async registrarIntentoSaliente(
+    followupId: string,
+    intento: { conversationId?: string | null; callSid?: string | null; now?: Date },
+  ): Promise<void> {
+    await this.updateItem(
+      { PK: followupPk(followupId), SK: 'META' },
+      'SET ultimoCallSid = :callSid, ultimaConversationId = :conversationId, ' +
+        'ultimoIntentoAt = :now, updatedAt = :now',
+      {
+        ':callSid': intento.callSid ?? null,
+        ':conversationId': intento.conversationId ?? null,
+        ':now': (intento.now ?? new Date()).toISOString(),
+      },
+    );
+  }
+
+  /**
+   * FOLLOWUP que quedaron en DIALING: se origino la llamada y nunca llego un resultado. Es la
+   * entrada del reconciliador contra Twilio (`services/dialing-reconciler.ts`).
+   */
+  async listDialing(): Promise<Followup[]> {
+    return this.query<FollowupItem>({
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk',
+      ExpressionAttributeValues: { ':pk': 'ESTADO#DIALING' },
+    });
+  }
+
   /** Transicion generica de estado (para cierres tras procesar el resultado de la llamada). */
   async setEstado(
     followupId: string,

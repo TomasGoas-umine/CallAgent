@@ -12,6 +12,7 @@ import type {
   LlamadaResumen,
   MockOrderPatch,
   MockTableroResponse,
+  SeccionDeVoz,
   TableroOriginalResponse,
 } from './types';
 
@@ -195,7 +196,9 @@ export function App() {
           onGuardar={async (clientId: string, orderNumber: string, patch: MockOrderPatch) => {
             await accionMock(() => api.editarOrdenMock(clientId, orderNumber, patch));
           }}
-          onToggleAutoCall={(enabled: boolean) => void accionMock(() => api.setAutoCall(enabled))}
+          onToggleAutoCall={(seccion: SeccionDeVoz, enabled: boolean) =>
+            void accionMock(() => api.setAutoCall(seccion, enabled))
+          }
           onGuardarReglas={(rules: CallRules) => void accionMock(() => api.setCallRules(rules))}
           onRestaurarReglas={() => void accionMock(() => api.resetCallRules())}
           onReset={() => void accionMock(() => api.resetMock())}

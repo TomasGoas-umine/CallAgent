@@ -12,6 +12,9 @@ Verificado contra produccion el **2026-09-09**. Snapshot anonimizado de esa veri
 
 ---
 
+La revisión B/C contra la fuente local indicada por el usuario y la configuración independiente
+de llamadas DJ se documentan en [Auditoría B/C](status/AUDITORIA-SEMAFORO-B-C-2026-09-11.md).
+
 ## 1. Que es el Semaforo
 
 Umine es una OTEC chilena: gestiona cursos financiados por SENCE. Cada curso es una Orden de
@@ -53,10 +56,10 @@ Cada seccion tiene su propio filtro de entrada y su propia escala. **No comparte
 | **B · Riesgo DJ**       | ¿que cursos ya terminados tienen conectados sin Declaracion Jurada?  | `criticidadDj()` L83-87 (>3d EN RIESGO, >7d CRITICO) | **implementada** |
 | **C · Rectificacion**   | ¿que OCs llevan mucho esperando la OC Final del OTIC?                | dias desde `max(updated_at)`, visible >3d            | **implementada** |
 
-Las tres estan implementadas y las tres se MUESTRAN (Tablero Mock y Tablero Original), pero
-**solo A puede terminar en una llamada**. B y C quedan fuera del flujo de voz **a proposito**: se
-resuelven con el OTIC, no con el alumno, y llamar por telefono no las mueve. El MVP llama por
-conexion pendiente, que si es accionable por telefono. Ver ADR-011.
+Las tres se muestran en Tablero Mock y Tablero Original. **A y B pueden originar llamadas**
+(ADR-012): A sigue participación; B sigue declaraciones juradas con el contacto responsable.
+C sigue siendo informativa. Si B depende de validación del OTIC o de una corrección administrativa,
+el agente deriva a revisión humana; no firma declaraciones ni promete modificar SENCE.
 
 Las tres escalas son independientes y no se comparan entre si: A mide porcentaje contra la semana
 del curso, B y C miden dias. Un CRITICO de una seccion no equivale al de otra.
@@ -292,9 +295,8 @@ montos, RUT u OTIC seria inventar reglas que el original no tiene.
 | `ultimaActualizacion` | C       | `max(updated_at)` de la OC (`StatusCursosPage.tsx:632-645`)                           |
 
 El Mock dibuja las TRES secciones como vinetas colapsables y cada tabla edita los campos de SU
-criterio; son tres vistas del mismo juego de OCs, no tres listas. **Solo la seccion A tiene
-columna «¿Llama?»**, y no porque las otras la escondan: la decision de llamar la arma el backend
-unicamente desde la seccion A (ADR-011).
+criterio; son tres vistas del mismo juego de OCs, no tres listas. **A y B tienen columna
+«¿Llama?»** y reciben la decision resuelta del backend. C sigue informativa (ADR-012).
 
 Dos reglas de validacion propias del Mock, que el dato real no impone pero el editor si:
 
@@ -364,7 +366,7 @@ queda marcado durante una llamada real, la unica salida es limpiar la base local
 | 2   | **La logica esta duplicada en 3 lugares** (2 en el Semaforo, 1 aca)                 | Un cambio de umbral en uno solo hace que clasifiquen distinto y **nada lo detecta**.                                                                                                                               |
 | 3   | **`REQUIRE_AUTH` apagado en prod**                                                  | El Semaforo entero es legible sin credenciales. No es de CallAgent, pero conviene que este escrito.                                                                                                                |
 | 4   | **No hay `last_sence_sync` en la respuesta**                                        | No se puede saber que tan fresco es el dato; solo `updated_at`, que tambien se mueve con ediciones manuales. Desfase real de hasta ~30 min (cron del SENCE Sync).                                                  |
-| 5   | **Secciones B y C se muestran pero no se accionan**                                 | Deliberado (§3): no hay camino de llamada desde ninguna de las dos, y `tablero-api` es de solo lectura, asi que no se puede marcar una DJ ni pedir una OC Final desde aca.                                         |
+| 5   | **C no llama; B admite seguimiento verbal**                                         | B permite seguimiento con el responsable (ADR-012). C no llama. `tablero-api` sigue siendo de solo lectura: no se completa una DJ ni se pide una OC Final desde aca.                                               |
 | 6   | **El snapshot de test es un congelado**                                             | `tablero_search_real_anonymized.json` no se regenera solo. Si el contrato cambia, los tests siguen pasando contra el contrato viejo. Regenerar con `npm run semaforo:capture-sample` cuando se sospeche un cambio. |
 
 ### Las cuatro incompatibilidades que se corrigieron
@@ -402,7 +404,7 @@ tablero-api  ──► HttpTableroApiClient ──► groupOrders ──► gate
 
 **Ninguna llamada se dispara sola** (ADR-010). El unico origen es un humano apretando el boton.
 `dispatchFollowup` **revalida** el curso contra el Semaforo justo antes de marcar: si dejo de ser
-CRITICO o salio de la seccion A entre que el operador lo vio y aprieta, no se llama.
+CRITICO o salio de su seccion original (A o B) entre que el operador lo vio y aprieta, no se llama.
 
 **Observabilidad.** Cada lectura emite `semaforo_lectura` con: paginas, registros recibidos,
 descartes desglosados (estado muerto / sin OC / OC de otro equipo / alumno inactivo), OCs

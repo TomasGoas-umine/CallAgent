@@ -108,8 +108,10 @@ En el panel de ElevenLabs:
 
 Importante: **la llamada la origina ElevenLabs, no este backend.** Nosotros solo hacemos
 `POST /v1/convai/twilio/outbound-call` (integracion nativa, ADR-003). Por eso las credenciales
-de Twilio que importan son las que le diste a ElevenLabs; las de nuestro `.env` solo se usan
-para validar la firma del webhook de status de Twilio, que es opcional.
+de Twilio que importan para llamar son las que le diste a ElevenLabs. Las de nuestro `.env`
+(`TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`) se usan para validar la firma del webhook de status y,
+sobre todo, para que `calls:sync` pueda preguntar como termino cada llamada — tienen que ser de
+**la misma cuenta de Twilio** que ElevenLabs usa, o los `call_sid` no se van a encontrar.
 
 ### 2. Que el resultado de la llamada vuelva al proyecto
 
@@ -126,7 +128,24 @@ en la base local: transcripcion, resumen, campos extraidos, criterios de evaluac
 duracion, costo y motivo de corte. Tambien esta el boton **Sincronizar** del Dashboard
 (`POST /api/calls/sync`).
 
-Solo hace `GET` contra ElevenLabs: **no origina ninguna llamada**, no gasta minutos y es
+Ademas, si hay credenciales de Twilio, **le pregunta a Twilio como termino realmente la llamada**.
+Sirve para dos cosas que ElevenLabs no puede resolver:
+
+- **Clasificar bien una llamada que nadie atendio.** El `status` de ElevenLabs nunca dice
+  `no-answer` ni `busy`, asi que una llamada sin atender parecia una conversacion vacia y se
+  cerraba como "contactado". Si Twilio dice `no-answer`/`busy`/`failed`/`canceled`, ese resultado
+  manda. Si dice `completed`, decide la conversacion como siempre.
+- **Destrabar los seguimientos colgados en `DIALING`.** Las llamadas que no dejan ninguna
+  conversacion no aparecen en el listado de ElevenLabs, asi que su seguimiento quedaba ahi para
+  siempre. Una segunda pasada revisa cada FOLLOWUP en `DIALING` contra el `call_sid` que guardo
+  el dispatcher (`npm run calls:sync -- --no-twilio` la saltea; `--gracia=30` cambia los minutos
+  que se le dan a una llamada recien disparada antes de considerarla colgada).
+
+Nada de esto adivina: sin `call_sid` guardado, o si el SID no existe en esa cuenta de Twilio, el
+seguimiento se deja como esta y el reporte dice por que. Y un `completed` cuya conversacion
+todavia no entrega ElevenLabs tampoco se cierra — el resultado bueno esta por llegar.
+
+Solo hace `GET` contra ElevenLabs y Twilio: **no origina ninguna llamada**, no gasta minutos y es
 idempotente — se puede correr las veces que haga falta. No necesita URL publica, ni tunel, ni
 webhook registrado, ni secreto.
 
@@ -214,14 +233,17 @@ y `KILL_SWITCH=true` corta todo al instante.
 - **`CALL_RECORDING_ENABLED`**: default `false` (UV-026, decision de negocio abierta). Se manda
   explicito en cada request, no se hereda de la config del agente.
 - **Un followup colgado en `DIALING` casi nunca es un bug**: es que el resultado no volvio.
-  Corre `npm run calls:sync` — si la llamada existio, lo trae. Si aparece como no atribuible,
-  la conversacion no la origino este proyecto.
-- **"No contestaron" todavia no se clasifica bien (UV-053)**: el `data.status` del webhook real
-  solo toma `initiated`/`in-progress`/`processing`/`done`/`failed` — nunca `no-answer` ni `busy`,
-  que es lo que espera el clasificador. Una llamada que nadie atiende termina hoy como
-  `contacted`/`unknown` -> `CERRADO`, marcando el contacto como contactado y sin reprogramar el
-  reintento. Hay que calibrarlo con payloads reales (`metadata.termination_reason` es la pista);
-  `webhook:selftest -- --conversation-id=<id>` permite reproducirlos sin volver a llamar.
+  Corre `npm run calls:sync` — si la llamada existio, lo trae; y si no dejo ninguna conversacion
+  (nadie atendio, rechazo del carrier), la segunda pasada lo resuelve con el estado final de
+  Twilio. Si aparece como no atribuible, la conversacion no la origino este proyecto. Si aparece
+  como `sin_datos`, ese followup se origino antes de que se guardara el `call_sid` (o el SID es
+  de otra cuenta de Twilio): hay que mirarlo en el log de Twilio y atribuirlo a mano.
+- **"No contestaron" lo resuelve Twilio, no ElevenLabs (UV-053)**: el `data.status` del webhook
+  solo toma `initiated`/`in-progress`/`processing`/`done`/`failed` — nunca `no-answer` ni `busy`.
+  Por eso `calls:sync` consulta el estado final de la llamada en Twilio y ese resultado manda
+  cuando dice que la llamada no se establecio. **Si no cargaste `TWILIO_ACCOUNT_SID`/
+  `TWILIO_AUTH_TOKEN`** (o son de otra cuenta), una llamada sin atender sigue cayendo como
+  `contacted` -> `CERRADO`: el webhook por si solo no alcanza para distinguirla.
 - **`DRY_RUN`** solo afecta al evaluador en lote, **no** al disparador manual: no te protege de
   una llamada real disparada desde el micrositio. El que te protege es `MOCK_PROVIDERS`.
 

@@ -20,15 +20,17 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { buildTableroApiClient } from '../services/tablero-api-client.factory.js';
 import { HttpTableroApiClient } from '../services/tablero-api-client.http.js';
 import {
-  readSemaforo,
+  readCallSemaforo,
   readSemaforoSecciones,
   isCourseCallable,
 } from '../services/course-lookup.js';
 import {
   ESTADOS_EDITABLES,
+  SECCIONES_DE_VOZ,
+  esSeccionDeVoz,
   evaluateAllMockOrders,
+  getAutoCallEnabled,
   getCallRules,
-  isAutoCallEnabled,
   recordTriggerEvaluation,
   resetMockStore,
   setAutoCallEnabled,
@@ -47,16 +49,18 @@ import {
 import { originateManualCall, type ManualCallStatus } from '../services/manual-call.js';
 import { syncConversations, syncConversacionForzada } from '../services/conversation-sync.js';
 import { buildConversationsClient } from '../services/elevenlabs-conversations-client.js';
+import { buildTwilioCallsClient } from '../services/twilio-calls-client.js';
 import { FollowupRepository } from '../repositories/followup-repository.js';
 import { ContactRepository } from '../repositories/contact-repository.js';
 import { QuotaRepository } from '../repositories/quota-repository.js';
 import { buildCourseAgentVariables } from '../services/agent-variables.js';
-import { ALL_FOLLOWUP_ESTADOS, MOTIVO_RIESGO_CONEXION } from '../domain/followup.js';
+import { ALL_FOLLOWUP_ESTADOS, motivoDeSeccion } from '../domain/followup.js';
 import { env } from '../utils/env.js';
 import { logger, maskPhone } from '../utils/logger.js';
 import type { ManualCallDeps } from '../services/manual-call.js';
 import type { TableroApiClient } from '../services/tablero-api-client.js';
 import type { ConversationsClient } from '../services/elevenlabs-conversations-client.js';
+import type { TwilioCallsClient } from '../services/twilio-calls-client.js';
 
 /** Inyectables — en produccion/local se usan los defaults; los tests pasan los suyos. */
 export interface ApiDeps {
@@ -68,6 +72,12 @@ export interface ApiDeps {
   manualCallDeps?: ManualCallDeps;
   /** Lector de conversaciones de ElevenLabs (solo GET). Los tests inyectan uno falso. */
   conversationsClient?: ConversationsClient;
+  /**
+   * Lector del estado final de las llamadas en Twilio (solo GET). `null` explicito = no
+   * consultar; sin definir, se construye desde las credenciales del entorno (y queda en `null`
+   * si no hay).
+   */
+  twilioClient?: TwilioCallsClient | null;
 }
 
 /**
@@ -90,6 +100,7 @@ const HTTP_STATUS_BY_MANUAL_CALL_STATUS: Record<ManualCallStatus, number> = {
 };
 
 interface CreateCallBody {
+  seccion?: string;
   clientId?: string;
   orderNumber?: string;
   phone?: string;
@@ -177,7 +188,7 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
   // sin tocar el front (ver docs/SEMAFORO_INTEGRACION.md §10).
   // -------------------------------------------------------------------------
   app.get('/api/tablero', async (_request, reply) => {
-    const { evaluaciones: evaluations, stats } = await readSemaforo(tableroClient());
+    const { evaluaciones: evaluations, stats } = await readCallSemaforo(tableroClient());
     const contactos = contactRepository();
 
     const cursos = await Promise.all(
@@ -195,6 +206,8 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
           initCourse: e.group.initCourse,
           endCourse: e.group.endCourse,
           orderStatus: e.group.promotedOrderStatus,
+          seccion: e.seccion ?? 'A_RIESGO_CONEXION',
+          dj: e.dj ? { pendientes: e.dj.pendientes, diasDesdeCierre: e.dj.diasDesdeCierre } : null,
           semana: e.semana,
           nivel: e.nivel,
           /**
@@ -243,7 +256,7 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
            * llamada. Salen del mismo modulo que usa el dispatcher, para que el modal de
            * confirmacion no muestre algo distinto de lo que se envia.
            */
-          variablesAgente: buildCourseAgentVariables(e, MOTIVO_RIESGO_CONEXION),
+          variablesAgente: buildCourseAgentVariables(e, motivoDeSeccion(e.seccion)),
           /** Cosas que el operador deberia ver antes de llamar, sin que bloqueen el boton. */
           advertencias: [
             ...(phone ? [] : ['el Semaforo no trae telefono para este curso']),
@@ -295,7 +308,7 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
       /** Los numeros que el editor puede asignar a una OC, con el estado de cada uno. */
       telefonos,
       whitelistPruebas: testPhoneWhitelist(),
-      autoCallEnabled: isAutoCallEnabled(),
+      autoCallEnabled: getAutoCallEnabled(),
       cooldownSegundos: env.mockCallCooldownSeconds,
       estadosEditables: ESTADOS_EDITABLES,
       callRules: getCallRules(),
@@ -359,7 +372,7 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
       reply.code(400).send({ error: 'json_invalido', detalle: 'El cuerpo no es JSON valido.' });
       return;
     }
-    const validado = validarCallRules(body.value);
+    const validado = validarCallRules(body.value, getCallRules());
     if (!validado.ok) {
       reply.code(400).send({ error: 'call_rules_invalidas', detalle: validado.error });
       return;
@@ -376,22 +389,36 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
   });
 
   /**
-   * Encender/apagar las llamadas automaticas del Mock. Apagado por defecto.
+   * Encender/apagar las llamadas automaticas de UNA seccion de voz. Apagadas por defecto.
+   *
+   * La seccion es obligatoria y no tiene default: con dos interruptores, adivinar cual quiso
+   * mover el operador es exactamente el error que hace sonar el telefono equivocado. Solo se
+   * aceptan A y B — la seccion C no llama (ADR-011), asi que no tiene interruptor.
+   *
    * Encenderlo tampoco llama por si solo, por la misma razon que los umbrales: se re-linea el
    * latch primero. Hace falta una edicion posterior que produzca la transicion.
    */
-  app.put<{ Body: { enabled?: unknown } }>(
+  app.put<{ Body: { seccion?: unknown; enabled?: unknown } }>(
     '/api/tablero/mock/auto-call',
     async (request, reply) => {
       const body = parseJsonBodyRaw(request.body);
-      const enabled = body.ok ? (body.value as { enabled?: unknown })?.enabled : undefined;
+      const raw = body.ok ? (body.value as { seccion?: unknown; enabled?: unknown }) : undefined;
+      const enabled = raw?.enabled;
+      const seccion = raw?.seccion;
       if (typeof enabled !== 'boolean') {
         reply.code(400).send({ error: 'body_invalido', detalle: 'enabled debe ser booleano' });
         return;
       }
+      if (!esSeccionDeVoz(seccion)) {
+        reply.code(400).send({
+          error: 'seccion_invalida',
+          detalle: `seccion debe ser una de: ${SECCIONES_DE_VOZ.join(', ')}`,
+        });
+        return;
+      }
       rebaselineTriggers();
-      setAutoCallEnabled(enabled);
-      logger.warn('mock_auto_call_toggled', { enabled });
+      setAutoCallEnabled(seccion, enabled);
+      logger.warn('mock_auto_call_toggled', { seccion, enabled });
       reply.code(200).send(await mockPayload());
     },
   );
@@ -399,7 +426,12 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
   /** Re-linea el latch de todas las OCs sin llamar: evita rafagas al cambiar configuracion. */
   function rebaselineTriggers(): void {
     for (const e of evaluateAllMockOrders()) {
-      recordTriggerEvaluation(e.order.clientId, e.order.orderNumber, e.regla.dispara);
+      recordTriggerEvaluation(
+        e.order.clientId,
+        e.order.orderNumber,
+        e.regla.dispara,
+        e.variablesAgente.motivo,
+      );
     }
   }
 
@@ -605,8 +637,13 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
         /** Costo en creditos de ElevenLabs y por que corto la llamada el proveedor. */
         cost: c.cost ?? null,
         terminationReason: c.terminationReason ?? null,
-        /** `webhook` = ElevenLabs lo entrego; `sync` = lo fue a buscar `calls:sync`. */
+        /**
+         * `webhook` = ElevenLabs lo entrego; `sync` = lo fue a buscar `calls:sync`; `twilio` =
+         * no hubo conversacion y lo resolvio el estado final de Twilio.
+         */
         fuente: c.fuente ?? 'webhook',
+        /** Estado final de la llamada segun Twilio, cuando se pudo consultar. */
+        twilio: c.twilio ?? null,
         transcriptSummary: c.transcriptSummary ?? null,
         transcript: c.transcript ?? [],
       })),
@@ -614,9 +651,10 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
   });
 
   // -------------------------------------------------------------------------
-  // POST /api/calls/sync — trae los resultados de llamada desde la API de ElevenLabs
+  // POST /api/calls/sync — trae los resultados de llamada desde la API de ElevenLabs y cierra
+  // contra Twilio los seguimientos que quedaron en DIALING (llamadas que no dejaron conversacion).
   //
-  // NO origina ninguna llamada: solo hace GET contra ElevenLabs y escribe en la base local.
+  // NO origina ninguna llamada: solo hace GET contra los proveedores y escribe en la base local.
   // Se registra ANTES de `POST /api/calls` a proposito: Fastify hace match exacto de ruta, pero
   // dejarlos juntos deja claro que son cosas distintas — este no gasta minutos.
   // -------------------------------------------------------------------------
@@ -638,8 +676,14 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
     };
     const conversationsClient =
       deps.conversationsClient ?? buildConversationsClient(env.elevenlabsApiKey);
+    // `undefined` en deps = construirlo del entorno; `null` explicito = no consultar Twilio.
+    const twilioClient =
+      deps.twilioClient !== undefined
+        ? deps.twilioClient
+        : buildTwilioCallsClient(env.twilioAccountSid, env.twilioAuthToken);
     const syncDeps = {
       conversationsClient,
+      twilioClient,
       followupRepository: followupRepository(),
       contactRepository: contactRepository(),
     };
@@ -702,10 +746,20 @@ export async function registerApiRoutes(app: FastifyInstance, deps: ApiDeps = {}
       return;
     }
 
+    if (
+      body.seccion !== undefined &&
+      body.seccion !== 'A_RIESGO_CONEXION' &&
+      body.seccion !== 'B_RIESGO_DJ'
+    ) {
+      reply.code(400).send({ error: 'seccion_no_soportada' });
+      return;
+    }
+
     const result = await originateManualCall(
       {
         clientId: body.clientId,
         orderNumber: body.orderNumber,
+        seccion: body.seccion,
         phone: body.phone,
         idempotencyKey,
         requestedBy: body.requestedBy,

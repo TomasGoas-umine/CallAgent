@@ -37,6 +37,8 @@ export interface Health {
 }
 
 export interface CursoTablero {
+  seccion?: 'A_RIESGO_CONEXION' | 'B_RIESGO_DJ';
+  dj?: { pendientes: number; diasDesdeCierre: number } | null;
   clientId: string;
   clientName: string;
   orderNumber: string;
@@ -161,8 +163,20 @@ export interface LlamadaDetalle {
   evaluacion: Record<string, { result?: string; rationale?: string }>;
   cost: number | null;
   terminationReason: string | null;
-  /** `webhook` = ElevenLabs lo entrego; `sync` = lo trajo la sincronizacion por API. */
-  fuente: 'webhook' | 'sync';
+  /**
+   * `webhook` = ElevenLabs lo entrego; `sync` = lo trajo la sincronizacion por API; `twilio` =
+   * la llamada no dejo conversacion y el resultado salio del estado final de Twilio.
+   */
+  fuente: 'webhook' | 'sync' | 'twilio';
+  /** Estado final de la llamada segun Twilio, cuando se pudo consultar. */
+  twilio: {
+    status: string;
+    answeredBy: string | null;
+    durationSeconds: number | null;
+    startedAt: string | null;
+    endedAt: string | null;
+    price: number | null;
+  } | null;
   transcriptSummary: string | null;
   transcript: TranscriptTurn[];
 }
@@ -177,6 +191,28 @@ export interface SyncItem {
   via?: 'conversation_link' | 'user_id' | 'forzada';
   startedAt?: string | null;
   durationSeconds?: number | null;
+  /** Estado final que reporto Twilio para esa llamada, si se pudo consultar. */
+  twilioStatus?: string;
+}
+
+/**
+ * Una fila de la segunda pasada del sync: un FOLLOWUP que estaba en DIALING, revisado contra el
+ * estado final de Twilio. Las llamadas que nadie atiende no dejan conversacion en ElevenLabs, asi
+ * que este es el unico camino por el que ese seguimiento se destraba.
+ */
+export interface SyncPendiente {
+  followupId: string;
+  estado:
+    | 'resuelta_por_twilio'
+    | 'ya_registrada'
+    | 'en_curso'
+    | 'esperando_conversacion'
+    | 'sin_datos'
+    | 'error';
+  callSid?: string | null;
+  twilioStatus?: string;
+  outcome?: string;
+  motivo?: string;
 }
 
 export interface SyncResponse {
@@ -187,6 +223,18 @@ export interface SyncResponse {
   noAtribuibles: number;
   errores: number;
   items: SyncItem[];
+  /**
+   * Segunda pasada del sync (seguimientos en DIALING contra Twilio). Opcionales porque el server
+   * local no recarga solo: con `npm run local:server` corriendo codigo viejo la respuesta no los
+   * trae, y el Dashboard tiene que seguir mostrando el resto en vez de quedarse en blanco.
+   */
+  pendientes?: SyncPendiente[];
+  twilio?: {
+    consultado: boolean;
+    motivo?: string;
+    conversacionesCruzadas: number;
+    dialingResueltos: number;
+  };
 }
 
 export interface CallDetalleResponse {
@@ -266,6 +314,9 @@ export type MockOrderPatch = Partial<
   >
 >;
 
+/** Las secciones que pueden originar una llamada. C no esta: no llama (ADR-011). */
+export type SeccionDeVoz = 'A_RIESGO_CONEXION' | 'B_RIESGO_DJ';
+
 export interface CallRuleDecision {
   dispara: boolean;
   motivo: 'umbral_alcanzado' | 'nivel_no_habilitado' | 'semana_sin_umbral' | 'sobre_el_umbral';
@@ -325,11 +376,13 @@ export interface MockOrderEvaluation {
   motivoFueraDeSeccionA: MotivoFueraDeSeccion | null;
   /** Estados que cuadran con las fechas de esta OC. Lo decide el backend, no esta vista. */
   estadosCoherentes: string[];
-  /** Seccion B, ya clasificada por el backend. `regla` no la mira: esta seccion no llama. */
+  /** Por que criterio llamaria esta OC. Lo decide el backend; el front solo lo refleja. */
+  seccion: SeccionDeVoz;
+  /** Seccion B, ya clasificada por el backend; usa su regla de llamada independiente. */
   dj: SeccionDjEvaluacion;
   /** Seccion C, ya clasificada por el backend. Tampoco llama. */
   rectificacion: SeccionRectificacionEvaluacion;
-  /** Decision de llamada. Sale SOLO de la seccion A (riesgo de conexion). */
+  /** Decision de llamada de la sección de voz seleccionada (A o B). */
   regla: CallRuleDecision;
   ultimoDisparoAt: string | null;
   ultimoResultado: string | null;
@@ -337,6 +390,7 @@ export interface MockOrderEvaluation {
 
 /** Umbrales que disparan LLAMADAS. No son los del Semaforo: esos no se pueden editar. */
 export interface CallRules {
+  dj: { llamarSiDiasMayorA: number | null; nivelesQueLlaman: Nivel[] };
   llamarSiPctMenorA: Record<string, number | null>;
   nivelesQueLlaman: Nivel[];
 }
@@ -369,7 +423,8 @@ export interface MockTableroResponse {
   /** Los numeros que el editor puede asignar por OC. El front no los conoce de antemano. */
   telefonos: TelefonoMock[];
   whitelistPruebas: string[];
-  autoCallEnabled: boolean;
+  /** Un interruptor por seccion de voz: encender una no enciende la otra. */
+  autoCallEnabled: Record<SeccionDeVoz, boolean>;
   cooldownSegundos: number;
   estadosEditables: string[];
   callRules: CallRules;

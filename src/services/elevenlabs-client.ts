@@ -34,7 +34,7 @@ export interface StartOutboundCallParams {
    *   - `dynamic_variables.followup_id` — el confiable. ElevenLabs devuelve las dynamic
    *     variables verbatim en `GET /v1/convai/conversations/{id}` (verificado contra la cuenta).
    *     Se inyecta ACA y no en `buildAgentDynamicVariables` porque esa funcion define el
-   *     contrato conversacional del agente: son exactamente las siete variables que su prompt
+   *     contrato conversacional del agente: son exactamente las ocho variables que su prompt
    *     usa, y un test las compara por igualdad estricta contra
    *     `scripts/lib/sence-agent-config.ts`. `followup_id` es metadato tecnico, no algo que el
    *     agente diga; agregarlo alla romperia ese contrato y ademas apareceria en el modal de

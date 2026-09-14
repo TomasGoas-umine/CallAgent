@@ -10,6 +10,7 @@
 import { buildTableroApiClient } from '../../services/tablero-api-client.factory.js';
 import { buildElevenLabsClient } from '../../services/elevenlabs-client.factory.js';
 import { findCourseEvaluation, isCourseCallable } from '../../services/course-lookup.js';
+import { motivoDeSeccion } from '../../domain/followup.js';
 import { buildCourseAgentVariables } from '../../services/agent-variables.js';
 import { runGuardrails } from '../../services/guardrails.js';
 import { FollowupRepository } from '../../repositories/followup-repository.js';
@@ -73,6 +74,7 @@ export async function dispatchFollowup(
     tableroClient,
     followup.contexto.clientId,
     followup.contexto.orderNumber,
+    followup.contexto.seccion,
   );
 
   if (!evaluation) {
@@ -84,7 +86,10 @@ export async function dispatchFollowup(
     return { followupId, outcome: 'resuelto_sin_llamada', motivo: 'oc_ya_no_aparece_en_semaforo' };
   }
 
-  if (!isCourseCallable(tableroClient, evaluation)) {
+  if (
+    followup.motivo !== motivoDeSeccion(followup.contexto.seccion) ||
+    !isCourseCallable(tableroClient, evaluation)
+  ) {
     await followupRepository.setEstado(followupId, 'RESUELTO_SIN_LLAMADA');
     logger.info('dispatcher_resuelto_sin_llamada', {
       followupId,
@@ -165,6 +170,15 @@ export async function dispatchFollowup(
   if (callResult.conversationId) {
     await followupRepository.linkConversation(callResult.conversationId, followupId);
   }
+  // Deja anotado en el FOLLOWUP con que llamada se intento. El `callSid` es lo unico que permite
+  // averiguar despues que paso con una llamada que NO deja conversacion en ElevenLabs (nadie
+  // atendio, el carrier rechazo): sin el, el seguimiento se queda en DIALING para siempre.
+  // Ver `services/dialing-reconciler.ts`.
+  await followupRepository.registrarIntentoSaliente(followupId, {
+    conversationId: callResult.conversationId ?? null,
+    callSid: callResult.callSid ?? null,
+    now: deps.now,
+  });
 
   logger.info('dispatcher_dialing', {
     followupId,

@@ -187,11 +187,52 @@ describe('Tablero Mock', () => {
     expect(onGuardar).not.toHaveBeenCalled();
   });
 
-  it('el interruptor de llamadas automaticas arranca apagado y avisa', () => {
+  it('cada seccion que llama tiene SU interruptor, dentro de su vineta y apagado', () => {
     renderMock();
-    const toggle = screen.getByLabelText(/Llamadas automaticas del Mock/);
-    expect((toggle as HTMLInputElement).checked).toBe(false);
+    // Uno por seccion de voz, dentro de la vineta correspondiente. No hay uno global.
+    for (const titulo of ['A · Riesgo Conexion', 'B · Riesgo DJ']) {
+      const interruptor = within(seccionMock(titulo)).getByLabelText(
+        `Llamadas automaticas de ${titulo}`,
+      ) as HTMLInputElement;
+      expect(interruptor.checked).toBe(false);
+    }
+    // La seccion C no llama: no tiene interruptor que encender.
+    expect(
+      within(seccionMock('C · Rectificacion')).queryByLabelText(/Llamadas automaticas/),
+    ).toBeNull();
+    expect(screen.queryByLabelText(/Llamadas automaticas del Mock/)).toBeNull();
     expect(screen.getByText(/no se va a llamar a nadie/i)).toBeTruthy();
+  });
+
+  it('el interruptor manda SU seccion y no la otra', async () => {
+    const user = userEvent.setup();
+    const onToggleAutoCall = vi.fn();
+    renderMock({}, { onToggleAutoCall });
+
+    await user.click(
+      within(seccionMock('B · Riesgo DJ')).getByLabelText('Llamadas automaticas de B · Riesgo DJ'),
+    );
+    expect(onToggleAutoCall).toHaveBeenCalledTimes(1);
+    expect(onToggleAutoCall).toHaveBeenCalledWith('B_RIESGO_DJ', true);
+  });
+
+  it('tocar el interruptor no abre ni cierra la seccion', async () => {
+    // El interruptor vive dentro del <summary>, que es justo el elemento que colapsa la
+    // seccion. Sin detener la propagacion, encender las llamadas cerraba el tablero.
+    const user = userEvent.setup();
+    renderMock({}, { onToggleAutoCall: vi.fn() });
+    const seccion = seccionMock('A · Riesgo Conexion');
+    expect(seccion.open).toBe(true);
+    await user.click(within(seccion).getByLabelText('Llamadas automaticas de A · Riesgo Conexion'));
+    expect(seccion.open).toBe(true);
+  });
+
+  it('con una seccion encendida, el aviso de transicion sale en ESA vineta', () => {
+    renderMock({ autoCallEnabled: { A_RIESGO_CONEXION: false, B_RIESGO_DJ: true } });
+    expect(seccionMock('B · Riesgo DJ').textContent).toMatch(/ENCENDIDAS/);
+    expect(seccionMock('A · Riesgo Conexion').textContent).not.toMatch(/ENCENDIDAS/);
+    // Y ya no se afirma que esten apagadas "las dos".
+    expect(screen.queryByText(/no se va a llamar a nadie/i)).toBeNull();
   });
 
   it('muestra siempre la configuracion activa de disparo al final del tablero', () => {
@@ -207,6 +248,7 @@ describe('Tablero Mock', () => {
   it('marca los umbrales modificados frente a los del Semaforo', () => {
     renderMock({
       callRules: {
+        dj: { llamarSiDiasMayorA: 7, nivelesQueLlaman: ['CRITICO'] },
         llamarSiPctMenorA: { 1: null, 2: 90, 3: 80, 4: 90 },
         nivelesQueLlaman: ['CRITICO'],
       },
@@ -215,6 +257,50 @@ describe('Tablero Mock', () => {
     expect(within(panel).getAllByText('modificado').length).toBe(1);
     const restaurar = within(panel).getByRole('button', { name: /Restaurar valores del Semaforo/ });
     expect((restaurar as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('edita DJ por separado sin modificar las reglas A', async () => {
+    const user = userEvent.setup();
+    const onGuardarReglas = vi.fn();
+    renderMock({}, { onGuardarReglas });
+    await user.click(screen.getByRole('button', { name: 'Editar umbrales DJ' }));
+    const modal = screen.getByRole('dialog');
+    const dias = within(modal).getByLabelText(/Llamar si días desde el cierre/);
+    await user.clear(dias);
+    await user.type(dias, '3');
+    await user.click(within(modal).getByLabelText('ALERTA'));
+    await user.click(within(modal).getByRole('button', { name: 'Guardar umbrales DJ' }));
+    expect(onGuardarReglas.mock.calls[0]?.[0]).toMatchObject({
+      llamarSiPctMenorA: { 1: null, 2: 55, 3: 80, 4: 90 },
+      nivelesQueLlaman: ['CRITICO'],
+      dj: { llamarSiDiasMayorA: 3, nivelesQueLlaman: ['CRITICO', 'ALERTA'] },
+    });
+  });
+
+  it.each(['A', 'B'])('restaurar %s conserva los umbrales del otro criterio', async (criterio) => {
+    const user = userEvent.setup();
+    const onGuardarReglas = vi.fn();
+    renderMock(
+      {
+        callRules: {
+          llamarSiPctMenorA: { 1: null, 2: 70, 3: 80, 4: 90 },
+          nivelesQueLlaman: ['CRITICO'],
+          dj: { llamarSiDiasMayorA: 12, nivelesQueLlaman: ['CRITICO', 'ALERTA'] },
+        },
+      },
+      { onGuardarReglas },
+    );
+    await user.click(
+      screen.getByRole('button', {
+        name: criterio === 'A' ? 'Restaurar valores del Semaforo' : 'Restaurar umbrales DJ',
+      }),
+    );
+    const saved = onGuardarReglas.mock.calls[0]?.[0];
+    expect(saved.llamarSiPctMenorA[2]).toBe(criterio === 'A' ? 55 : 70);
+    expect(saved.dj.llamarSiDiasMayorA).toBe(criterio === 'A' ? 12 : 7);
+    expect(saved.dj.nivelesQueLlaman).toEqual(
+      criterio === 'A' ? ['CRITICO', 'ALERTA'] : ['CRITICO'],
+    );
   });
 
   it('el modal edita los umbrales de LLAMADA, no la criticidad del Semaforo', async () => {
@@ -252,18 +338,35 @@ describe('Tablero Mock', () => {
     expect(seccionMock('A · Riesgo Conexion').textContent).toMatch(/1 de 1 OCs en la seccion/);
   });
 
-  it('solo la seccion de conexion ofrece llamar; las otras dos lo dicen explicitamente', () => {
+  it('cada tablero lleva su propio color de borde, igual abierto que cerrado', () => {
+    // El color es identidad visual, no significado: distingue los tres tableros de un vistazo.
+    // Los valores viven en styles.css; aca solo se fija que cada seccion pida el suyo y que la
+    // clase no dependa de si esta abierta — el borde no puede cambiar de color al desplegar.
     renderMock();
-    expect(seccionMock('A · Riesgo Conexion').textContent).toMatch(
-      /unica seccion que puede llamar/,
+    const clase = (titulo: string) => seccionMock(titulo).className;
+    expect(clase('A · Riesgo Conexion')).toContain('uv-seccion--a');
+    expect(clase('B · Riesgo DJ')).toContain('uv-seccion--b');
+    expect(clase('C · Rectificacion')).toContain('uv-seccion--c');
+    expect(seccionMock('A · Riesgo Conexion').open).toBe(true);
+    expect(seccionMock('B · Riesgo DJ').open).toBe(false);
+    expect(clase('A · Riesgo Conexion').replace('--a', '--x')).toBe(
+      clase('B · Riesgo DJ').replace('--b', '--x'),
     );
+  });
+
+  it('A y B ofrecen llamar y C permanece informativa', () => {
+    renderMock();
+    expect(seccionMock('A · Riesgo Conexion').textContent).toMatch(/puede originar llamadas/);
 
     // La columna «¿Llama?» existe SOLO en la seccion de conexion.
     expect(
       within(seccionMock('A · Riesgo Conexion')).getByRole('columnheader', { name: '¿Llama?' }),
     ).toBeTruthy();
 
-    for (const titulo of ['B · Riesgo DJ', 'C · Rectificacion']) {
+    expect(
+      within(seccionMock('B · Riesgo DJ')).getByRole('columnheader', { name: '¿Llama?' }),
+    ).toBeTruthy();
+    for (const titulo of ['C · Rectificacion']) {
       const seccion = seccionMock(titulo);
       expect(seccion.textContent).toMatch(/no origina llamadas/);
       expect(within(seccion).queryByRole('columnheader', { name: '¿Llama?' })).toBeNull();
@@ -596,6 +699,39 @@ describe('Dashboard', () => {
     // sin tocar por no ser atribuibles.
     expect(await screen.findByText(/resultado\(s\) nuevo\(s\)/)).toBeTruthy();
     expect(screen.getByText(/1 no atribuibles/)).toBeTruthy();
+
+    vi.unstubAllGlobals();
+  });
+
+  it('el resumen del sync informa lo que resolvio Twilio', async () => {
+    // Segunda pasada: los seguimientos que quedaron en DIALING porque su llamada no dejo
+    // conversacion en ElevenLabs. Sin esto el operador no tiene como saber que se destrabaron.
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            total: 1,
+            registradas: 1,
+            yaRegistradas: 0,
+            noFinales: 0,
+            noAtribuibles: 0,
+            errores: 0,
+            items: [],
+            pendientes: [
+              { followupId: 'f-1', estado: 'resuelta_por_twilio', twilioStatus: 'no-answer' },
+            ],
+            twilio: { consultado: true, conversacionesCruzadas: 1, dialingResueltos: 1 },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const user = userEvent.setup();
+    render(<Dashboard llamadas={[LLAMADA_RESUELTA]} cargando={false} onRefrescar={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Sincronizar' }));
+
+    expect(await screen.findByText(/seguimiento\(s\) en\s+DIALING resuelto\(s\)/)).toBeTruthy();
 
     vi.unstubAllGlobals();
   });

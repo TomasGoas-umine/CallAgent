@@ -162,6 +162,8 @@ export function mockOrden(overrides: Partial<MockOrderEvaluation> = {}): MockOrd
     motivoFueraDeSeccionA: null,
     // El curso ya arranco: de los estados que dependen de fechas solo cuadra este.
     estadosCoherentes: ['', 'CURSO EN OPERACIÓN', 'BAJA'],
+    // Curso corriendo: llamaria por conexion. Los tests de DJ lo sobreescriben.
+    seccion: 'A_RIESGO_CONEXION',
     // Secciones B y C: el curso sigue corriendo, asi que ninguna de las dos la incluye. Se
     // sobreescriben por test para armar los escenarios de DJ pendiente / espera del OTIC.
     dj: {
@@ -205,14 +207,16 @@ export function mockTablero(overrides: Partial<MockTableroResponse> = {}): MockT
       },
     ],
     whitelistPruebas: [TELEFONO_PRUEBAS, TELEFONO_PRUEBAS_2],
-    autoCallEnabled: false,
+    autoCallEnabled: { A_RIESGO_CONEXION: false, B_RIESGO_DJ: false },
     cooldownSegundos: 300,
     estadosEditables: ['', 'CURSO EN OPERACIÓN', 'NO INICIADA', 'BAJA'],
     callRules: {
+      dj: { llamarSiDiasMayorA: 7, nivelesQueLlaman: ['CRITICO'] },
       llamarSiPctMenorA: { 1: null, 2: 55, 3: 80, 4: 90 },
       nivelesQueLlaman: ['CRITICO'],
     },
     callRulesDefault: {
+      dj: { llamarSiDiasMayorA: 7, nivelesQueLlaman: ['CRITICO'] },
       llamarSiPctMenorA: { 1: null, 2: 55, 3: 80, 4: 90 },
       nivelesQueLlaman: ['CRITICO'],
     },

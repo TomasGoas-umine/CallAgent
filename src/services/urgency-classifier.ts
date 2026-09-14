@@ -14,8 +14,7 @@
  *   - Seccion B - Riesgo DJ: `clasificarDj`, por DIAS desde el cierre del curso.
  *   - Seccion C - Rectificacion: `clasificarRectificacion`, por DIAS esperando al OTIC.
  *
- * Solo la seccion A puede terminar en una llamada. B y C se muestran y se editan en el Tablero
- * Mock, pero no alimentan ninguna regla de llamada (ver `call-rules.ts` y ADR-011).
+ * A y B alimentan reglas de llamada independientes; C solo se muestra (ADR-012).
  */
 
 import type { CourseWeek, UrgencyLevel } from '../domain/candidate.js';

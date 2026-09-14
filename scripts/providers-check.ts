@@ -233,7 +233,9 @@ async function chequearTwilio(): Promise<void> {
     aviso(
       'sin TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN no se puede verificar. No es bloqueante para ' +
         'llamar (ElevenLabs usa sus propias credenciales de Twilio, las que le diste al ' +
-        'importar el numero), pero si lo es para validar la firma del webhook de status',
+        'importar el numero), pero si lo es para validar la firma del webhook de status y para ' +
+        'que `npm run calls:sync` pueda saber si una llamada fue contestada (ElevenLabs no lo ' +
+        'distingue) o destrabar un seguimiento en DIALING',
     );
     return;
   }
@@ -253,6 +255,13 @@ async function chequearTwilio(): Promise<void> {
           'Verifica tus dos numeros en Twilio Console -> Phone Numbers -> Verified Caller IDs',
       );
     }
+    // Aviso deliberado: `calls:sync` consulta los `call_sid` con ESTAS credenciales. Si son de
+    // otra cuenta de Twilio que la que ElevenLabs usa para llamar, cada consulta da 404 y el
+    // sync no puede clasificar ninguna llamada ni destrabar un DIALING.
+    aviso(
+      'esta cuenta tiene que ser la MISMA que ElevenLabs usa para llamar (la que registraste en ' +
+        'Agents Platform -> Phone Numbers): `npm run calls:sync` busca los call_sid aca',
+    );
     await chequearGeoPermissions(auth);
   } else if (res.status === 401) {
     falta('Twilio rechazo las credenciales (401): revisa el Account SID y el Auth Token');

@@ -121,3 +121,24 @@ Dashboard o `npm run calls:sync`; esto no reemplaza la validación del webhook.
 
 Documentación del proveedor: [personalización y variables por llamada](https://elevenlabs.io/docs/eleven-agents/customization/personalization).
 La rama opcional `ELEVENLABS_AGENT_BRANCH_ID` también viaja en los datos de inicio de la llamada.
+
+## Criterio B — declaraciones juradas (2026-09-11)
+
+1. En Tablero Mock, mantén apagadas las llamadas mientras preparas una OC. Usa un inicio
+   anterior al término y término de hace diez días; asigna ocho conectados y ocho DJ. El estado
+   acompaña las fechas. La fila B debe quedar fuera de riesgo porque las DJ están completas.
+2. En el detalle de contexto compartido de esa OC elige el contacto y teléfono de prueba.
+   Activa el interruptor de llamadas y guarda en B un cambio a dos DJ. Ahora hay seis pendientes:
+   la transición a CRITICO debe intentar una sola llamada. Guardar otra vez no llama nuevamente.
+3. El agente debe confirmar identidad y preguntar por **declaraciones juradas del curso
+   terminado**, incluso con ocho conectados de ocho inscritos (100% de conexión).
+4. Prueba por separado: compromiso de coordinar declaraciones con fecha; reporte de que todas
+   se entregaron; bloqueo de plataforma; dependencia de validación del OTIC; no volver a llamar.
+   El historial debe conservar motivo `riesgo_dj_critico` y el resultado correspondiente.
+5. Con automáticas apagadas, también puedes seleccionar la OC B en el Disparador. La confirmación
+   muestra declaraciones pendientes y días desde cierre, junto con las variables del agente.
+6. Completar las DJ antes de confirmar debe cancelar el disparo. Una OC con C crítico y sin riesgo
+   A/B nunca debe originar llamada. Los umbrales editables de conexión no afectan a B.
+
+Los días B usan `Math.ceil` tal como el semáforo original; los cortes se aplican al número
+calculado por el backend. Las simulaciones de texto no sustituyen esta comprobación de voz.

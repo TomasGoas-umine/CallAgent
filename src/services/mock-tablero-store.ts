@@ -29,8 +29,7 @@
  * criterios a la vez, igual que en `StatusCursosPage.tsx`: A - Riesgo Conexion (% de conexion
  * contra la semana de curso), B - Riesgo DJ (dias desde el cierre con DJ incompleta) y
  * C - Rectificacion (dias esperando la OC Final del OTIC). Las tres se muestran y se editan;
- * **solo A puede terminar en una llamada** — `regla` sale unicamente de la seccion A, y ni
- * `dj` ni `rectificacion` entran en `call-rules.ts` ni en `mock-call-trigger.ts` (ADR-011).
+ * **A y B pueden llamar**; `regla` usa la sección activa de voz (ADR-012). C solo se muestra.
  *
  * La clasificacion NO se calcula aca: se delega en los mismos modulos espejo del Semaforo
  * (`order-status-promoter`, `semaforo-sections`, `urgency-classifier`). Este archivo solo
@@ -70,6 +69,7 @@ import {
 import {
   defaultCallRules,
   evaluarReglaDeLlamada,
+  evaluarReglaDj,
   type CallRuleDecision,
   type CallRules,
 } from './call-rules.js';
@@ -79,7 +79,7 @@ import { normalizeCourseDate } from '../utils/dates.js';
 import type { CourseWeek, TableroRecord, UrgencyLevel } from '../domain/candidate.js';
 import { buildAgentDynamicVariables } from './agent-variables.js';
 import { courseDaysRemaining } from '../utils/dates.js';
-import { MOTIVO_RIESGO_CONEXION } from '../domain/followup.js';
+import { MOTIVO_RIESGO_CONEXION, MOTIVO_RIESGO_DJ, type CallSection } from '../domain/followup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED_FIXTURE = path.resolve(
@@ -99,6 +99,10 @@ export const ESTADOS_EDITABLES = [
   'OBTENIENDO DJ',
   'REVISAR',
   'ESPERA OC FINAL',
+  'EN RECTIFICACION',
+  'OCF SOLICITADA',
+  'SOLICITUD OC FINAL ENVIADA',
+  'OC RECIBIDA',
   'ENVIADA A FACTURAR',
   'FACTURADA',
   'BAJA',
@@ -175,17 +179,21 @@ export interface MockOrderEvaluation {
    * (junto con un cambio de fechas), pero el PATCH los rechaza si las fechas no acompanan.
    */
   estadosCoherentes: string[];
-  /**
-   * Seccion B - Riesgo DJ. Se calcula y se muestra; NUNCA se consulta para decidir una llamada.
-   * Va en un bloque aparte y no en campos sueltos para que sea evidente de un vistazo que
-   * `regla` no lo mira: la decision de llamar usa `nivel`/`enSeccionA`, nada de aca.
-   */
+  /** Sección B: clasificación independiente que también decide seguimiento de DJ. */
   dj: SeccionDjEvaluacion;
-  /** Seccion C - Rectificacion. Mismo trato que `dj`: se muestra, no llama. */
+  /** Seccion C - Rectificacion: se muestra, no llama. */
   rectificacion: SeccionRectificacionEvaluacion;
   /**
-   * Decision de la REGLA DE LLAMADA configurable — no es el nivel del Semaforo, y sale
-   * EXCLUSIVAMENTE de la seccion A (conexion).
+   * Por que criterio llamaria esta OC si llamara. Se calcula UNA vez aca y lo consumen el
+   * trigger (para saber que interruptor mirar) y el micrositio: antes cada uno repetia el
+   * `gateSeccionB(...).incluido` por su cuenta y podian discrepar.
+   *
+   * Una OC en seccion B llama por DJ; cualquier otra, por conexion. Nunca por C.
+   */
+  seccion: CallSection;
+  /**
+   * Decision de la REGLA DE LLAMADA de la seccion que le corresponde — no es el nivel del
+   * Semaforo, y sale de A o B, con reglas de llamada independientes.
    */
   regla: CallRuleDecision;
   ultimoDisparoAt: string | null;
@@ -220,6 +228,7 @@ export interface SeccionRectificacionEvaluacion {
 interface TriggerState {
   /** Si la OC ya estaba en condicion de llamar en la evaluacion anterior. */
   disparabaAntes: boolean;
+  motivoAnterior?: string;
   /** Se incrementa en cada transicion no→si. Entra en la idempotency key. */
   secuencia: number;
   ultimoDisparoAt: string | null;
@@ -241,8 +250,25 @@ interface MockState {
   runId: string;
   orders: Map<string, MockOrder>;
   callRules: CallRules;
-  autoCallEnabled: boolean;
+  /**
+   * Un interruptor POR SECCION DE VOZ, no uno global. Encender las llamadas de riesgo de
+   * conexion no puede encender tambien las de declaraciones juradas: son dos criterios
+   * distintos, con dos conversaciones distintas, y el operador prueba uno a la vez. Con un
+   * unico toggle, encenderlo para probar A dejaba armadas tambien las de B sin que nadie lo
+   * pidiera — y el plan es Starter.
+   *
+   * La seccion C no aparece aca a proposito: no llama (ADR-011), asi que no tiene interruptor
+   * que encender.
+   */
+  autoCallEnabled: Record<CallSection, boolean>;
   triggers: Map<string, TriggerState>;
+}
+
+/** Las secciones que pueden llamar. C no esta: no tiene camino a una llamada. */
+export const SECCIONES_DE_VOZ: CallSection[] = ['A_RIESGO_CONEXION', 'B_RIESGO_DJ'];
+
+export function esSeccionDeVoz(valor: unknown): valor is CallSection {
+  return typeof valor === 'string' && SECCIONES_DE_VOZ.includes(valor as CallSection);
 }
 
 export function mockOrderKey(clientId: string, orderNumber: string): string {
@@ -296,8 +322,9 @@ function ensureState(): MockState {
       runId: randomUUID().slice(0, 8),
       orders: seedOrders(),
       callRules: defaultCallRules(),
-      // Apagado por defecto: nadie enciende llamadas reales sin decirlo explicitamente.
-      autoCallEnabled: false,
+      // Apagados por defecto, los dos: nadie enciende llamadas reales sin decirlo
+      // explicitamente, y menos aun una seccion que no pidio encender.
+      autoCallEnabled: { A_RIESGO_CONEXION: false, B_RIESGO_DJ: false },
       triggers: new Map(),
     };
   }
@@ -323,12 +350,18 @@ export function setCallRules(rules: CallRules): void {
   ensureState().callRules = structuredClone(rules);
 }
 
-export function isAutoCallEnabled(): boolean {
-  return ensureState().autoCallEnabled;
+/** Si la seccion indicada tiene las llamadas automaticas encendidas. */
+export function isAutoCallEnabled(seccion: CallSection): boolean {
+  return ensureState().autoCallEnabled[seccion] ?? false;
 }
 
-export function setAutoCallEnabled(enabled: boolean): void {
-  ensureState().autoCallEnabled = enabled;
+/** El estado de las dos secciones de voz, para el micrositio. */
+export function getAutoCallEnabled(): Record<CallSection, boolean> {
+  return { ...ensureState().autoCallEnabled };
+}
+
+export function setAutoCallEnabled(seccion: CallSection, enabled: boolean): void {
+  ensureState().autoCallEnabled[seccion] = enabled;
 }
 
 export function listMockOrders(): MockOrder[] {
@@ -606,12 +639,19 @@ export function evaluateMockOrder(order: MockOrder, rules: CallRules): MockOrder
   const { groups } = groupOrders(toRecords(order));
   const group = groups[0];
 
+  // La seccion de voz se decide UNA vez: de ahi salen el motivo, las variables del agente y
+  // el interruptor que gobierna a esta OC. Antes el mismo gate se evaluaba tres veces suelto.
+  const enSeccionB = Boolean(group && gateSeccionB(group).incluido);
+  const seccion: CallSection = enSeccionB ? 'B_RIESGO_DJ' : 'A_RIESGO_CONEXION';
+
   const base = {
     order: { ...order },
+    seccion,
     estadosCoherentes: estadosCoherentesConLasFechas(order),
     variablesAgente: buildAgentDynamicVariables({
       ...order,
-      motivo: MOTIVO_RIESGO_CONEXION,
+      motivo: enSeccionB ? MOTIVO_RIESGO_DJ : MOTIVO_RIESGO_CONEXION,
+      djPendientes: enSeccionB && group ? group.totalConnections - group.djCount : undefined,
       diasRestantes: courseDaysRemaining(order.endCourse),
       pctConexion: group?.pctConexion,
     }),
@@ -655,7 +695,7 @@ export function evaluateMockOrder(order: MockOrder, rules: CallRules): MockOrder
     };
   }
 
-  // --- Seccion A - Riesgo Conexion. La UNICA que puede terminar en una llamada. ---
+  // --- Seccion A - Riesgo Conexion. Reglas configurables de conexión. ---
   const nivel = clasificarConexion(semana, group.pctConexion);
   const gate = gateSeccionA(group);
   const enSeccionA = gate.incluido;
@@ -669,7 +709,7 @@ export function evaluateMockOrder(order: MockOrder, rules: CallRules): MockOrder
         umbral: rules.llamarSiPctMenorA[semana],
       };
 
-  // --- Secciones B y C. Se calculan DESPUES de `regla` y no entran en ella. ---
+  // --- Secciones B y C. B aporta su propia regla; C sigue sin llamadas. ---
   const diasDesdeCierre = diasDesdeElCierre(group.endCourse);
   const gateB = gateSeccionB(group);
   const gateC = gateSeccionC(group);
@@ -698,7 +738,9 @@ export function evaluateMockOrder(order: MockOrder, rules: CallRules): MockOrder
       enSeccion: gateC.incluido,
       motivoFuera: gateC.incluido ? null : gateC.motivo,
     },
-    regla,
+    regla: gateB.incluido
+      ? evaluarReglaDj(true, clasificarDj(diasDesdeCierre), diasDesdeCierre, rules.dj)
+      : regla,
   };
 }
 
@@ -724,8 +766,10 @@ export function recordTriggerEvaluation(
   clientId: string,
   orderNumber: string,
   dispara: boolean,
+  motivo?: string,
 ): void {
   getTriggerState(clientId, orderNumber).disparabaAntes = dispara;
+  getTriggerState(clientId, orderNumber).motivoAnterior = motivo;
 }
 
 export function recordTriggerFired(

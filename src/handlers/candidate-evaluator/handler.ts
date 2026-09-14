@@ -3,12 +3,16 @@
  * npm run local:demo o por el endpoint POST /internal/evaluator del server Fastify).
  * Ver docs/bpmn/flujo-1-seleccion-priorizacion.mmd para el flujo completo.
  *
- * Unico caso de uso del MVP (prompt §5.1): Seccion A - Riesgo Conexion - nivel CRITICO.
+ * Candidatos CRITICO de A (conexión) y B (declaraciones juradas), ADR-012.
  */
 
 import { randomUUID } from 'node:crypto';
 import { buildTableroApiClient } from '../../services/tablero-api-client.factory.js';
-import { readSemaforo, type SemaforoStats } from '../../services/course-lookup.js';
+import {
+  readCallSemaforo,
+  isCourseCallable,
+  type SemaforoStats,
+} from '../../services/course-lookup.js';
 import { computeIdempotencyKey } from '../../services/idempotency.js';
 import { isKillSwitchActive, isDailyQuotaExceeded } from '../../services/guardrails.js';
 import { FollowupRepository } from '../../repositories/followup-repository.js';
@@ -19,12 +23,10 @@ import { env } from '../../utils/env.js';
 import { logger } from '../../utils/logger.js';
 import { ok } from '../../utils/responses.js';
 import { tomorrowAtBusinessHoursStart } from '../../utils/scheduling.js';
-import { MOTIVO_RIESGO_CONEXION } from '../../domain/followup.js';
+import { motivoDeSeccion } from '../../domain/followup.js';
 import type { Followup } from '../../domain/followup.js';
 import type { ApiResponse } from '../../utils/responses.js';
 import type { TableroApiClient } from '../../services/tablero-api-client.js';
-
-const MOTIVO = MOTIVO_RIESGO_CONEXION;
 
 export interface EvaluatorDeps {
   /**
@@ -80,13 +82,13 @@ export async function runCandidateEvaluator(deps: EvaluatorDeps = {}): Promise<E
   const tableroClient = deps.tableroClient ?? buildTableroApiClient();
   // Una sola lectura del Semaforo, con los gates de seccion A ya aplicados: `candidatoALlamada`
   // es `seccion A` + `nivel CRITICO`. Clasificar sin el gate metia cursos ya terminados.
-  const { evaluaciones, stats } = await readSemaforo(tableroClient);
+  const { evaluaciones, stats } = await readCallSemaforo(tableroClient);
   result.semaforo = stats;
 
   let createdToday = 0;
 
   for (const evaluacion of evaluaciones) {
-    if (!evaluacion.candidatoALlamada) continue; // unico caso de uso del MVP
+    if (!isCourseCallable(tableroClient, evaluacion)) continue;
     const group = evaluacion.group;
 
     result.candidatesEvaluated++;
@@ -114,7 +116,7 @@ export async function runCandidateEvaluator(deps: EvaluatorDeps = {}): Promise<E
 
     const idempotencyKey = computeIdempotencyKey({
       destinatario: phone,
-      motivo: MOTIVO,
+      motivo: motivoDeSeccion(evaluacion.seccion),
       orderNumber: group.orderNumber,
     });
 
@@ -146,7 +148,7 @@ export async function runCandidateEvaluator(deps: EvaluatorDeps = {}): Promise<E
     const now = new Date().toISOString();
     const followup: Followup = {
       followupId,
-      motivo: MOTIVO,
+      motivo: motivoDeSeccion(evaluacion.seccion),
       prioridad: 'ALTA',
       estado: 'READY',
       destinatarioId: group.clientId,
@@ -166,8 +168,8 @@ export async function runCandidateEvaluator(deps: EvaluatorDeps = {}): Promise<E
         orderNumber: group.orderNumber,
         initCourse: group.initCourse,
         endCourse: group.endCourse,
-        nivelDetectado: 'CRITICO',
-        seccion: 'A_RIESGO_CONEXION',
+        nivelDetectado: evaluacion.nivel,
+        seccion: evaluacion.seccion ?? 'A_RIESGO_CONEXION',
       },
     };
     await followupRepository.create(followup);

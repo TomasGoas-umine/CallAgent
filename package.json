@@ -36,7 +36,8 @@
     "web:build": "npm --prefix web run build",
     "web:test": "npm --prefix web test",
     "webhook:configure": "tsx --env-file=.env scripts/webhook-configure.ts",
-    "webhook:connect": "tsx --env-file=.env scripts/tunnel-up.ts --configure"
+    "webhook:connect": "tsx --env-file=.env scripts/tunnel-up.ts --configure",
+    "agent:configure": "tsx --env-file=.env scripts/agent-configure.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.649.0",

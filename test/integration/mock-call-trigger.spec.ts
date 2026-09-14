@@ -88,96 +88,115 @@ function volverCritica(store: Awaited<ReturnType<typeof freshModules>>['store'])
 }
 
 describe('mock-call-trigger', () => {
-  it('PATCH del tablero → preview → llamada HTTP conserva exactamente las variables guardadas', async () => {
-    await freshModules();
-    const { registerApiRoutes } = await import('../../src/local/api-routes.js');
-    const { RealElevenLabsClient } = await import('../../src/services/elevenlabs-client.js');
-    const deps = await freshDeps();
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({ success: true, conversation_id: 'conv_wire', callSid: 'CA_wire' }),
-          { status: 200 },
-        ),
-      );
-    const app = Fastify();
-    try {
-      await app.register(registerApiRoutes, {
-        ...deps,
-        manualCallDeps: { ...deps, elevenLabsClient: new RealElevenLabsClient('test-key') },
-      });
-      const patched = await app.inject({
-        method: 'PATCH',
-        url: '/api/tablero/mock/orders/client_test_demo/TEST-9600',
-        payload: {
-          contactoNombre: 'Francisca Rojas',
-          clientName: 'Empresa de prueba',
-          courseName: 'Excel aplicado',
-          inscritos: 8,
-          conexiones: 1,
-          endCourse: '2026-08-14',
-        },
-      });
-      expect(patched.statusCode).toBe(200);
-      const preview = patched
-        .json()
-        .ordenes.find(
-          (e: { order: { orderNumber: string } }) => e.order.orderNumber === 'TEST-9600',
-        ).variablesAgente;
-      const tablero = (await app.inject({ method: 'GET', url: '/api/tablero' })).json();
-      expect(
-        tablero.cursos.find((c: { orderNumber: string }) => c.orderNumber === 'TEST-9600')
-          .variablesAgente,
-      ).toEqual(preview);
-      expect(fetchSpy).not.toHaveBeenCalled();
-      const call = await app.inject({
-        method: 'POST',
-        url: '/api/calls',
-        headers: { 'idempotency-key': randomUUID() },
-        payload: { clientId: 'client_test_demo', orderNumber: 'TEST-9600', phone: TEL },
-      });
-      expect(call.statusCode).toBe(201);
-      const [url, request] = fetchSpy.mock.calls[0]!;
-      expect(url).toBe('https://api.elevenlabs.io/v1/convai/twilio/outbound-call');
-      const body = JSON.parse(request!.body as string);
-      expect(body.conversation_initiation_client_data.dynamic_variables).toEqual({
-        ...preview,
-        followup_id: call.json().followupId,
-      });
-      expect(preview.nombre_interlocutor).toBe('Francisca Rojas');
-      expect(preview.pct_conexion).toBe('12.5%');
-      expect(preview.dias_restantes).toBe('3');
-      // Los nombres vacíos sirven para probar contexto incompleto: nunca enviar la OC
-      // como nombre de curso ni "Sin cliente", que son fallbacks visuales del agrupador.
-      await app.inject({
-        method: 'PATCH',
-        url: '/api/tablero/mock/orders/client_test_demo/TEST-9600',
-        payload: { contactoNombre: '', clientName: '', courseName: '' },
-      });
-      const incomplete = (await app.inject({ method: 'GET', url: '/api/tablero' }))
-        .json()
-        .cursos.find((c: { orderNumber: string }) => c.orderNumber === 'TEST-9600');
-      expect(incomplete.variablesAgente).toMatchObject({
-        nombre_cliente: '',
-        nombre_curso: '',
-        nombre_interlocutor: 'el encargado de capacitacion',
-      });
-      await app.inject({
-        method: 'POST',
-        url: '/api/calls',
-        headers: { 'idempotency-key': randomUUID() },
-        payload: { clientId: 'client_test_demo', orderNumber: 'TEST-9600', phone: TEL },
-      });
-      expect(
-        JSON.parse(fetchSpy.mock.calls[1]![1]!.body as string).conversation_initiation_client_data
-          .dynamic_variables,
-      ).toMatchObject(incomplete.variablesAgente);
-    } finally {
-      fetchSpy.mockRestore();
-      await app.close();
-    }
-  });
+  it.each(['A', 'B'])(
+    'PATCH → preview → llamada HTTP de criterio %s conserva las variables y sección',
+    async (criterio) => {
+      await freshModules();
+      const { registerApiRoutes } = await import('../../src/local/api-routes.js');
+      const { RealElevenLabsClient } = await import('../../src/services/elevenlabs-client.js');
+      const deps = await freshDeps();
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ success: true, conversation_id: 'conv_wire', callSid: 'CA_wire' }),
+            { status: 200 },
+          ),
+        );
+      const app = Fastify();
+      try {
+        await app.register(registerApiRoutes, {
+          ...deps,
+          manualCallDeps: { ...deps, elevenLabsClient: new RealElevenLabsClient('test-key') },
+        });
+        const patched = await app.inject({
+          method: 'PATCH',
+          url: '/api/tablero/mock/orders/client_test_demo/TEST-9600',
+          payload: {
+            contactoNombre: 'Francisca Rojas',
+            clientName: 'Empresa de prueba',
+            courseName: 'Excel aplicado',
+            inscritos: 8,
+            conexiones: criterio === 'B' ? 8 : 1,
+            djs: criterio === 'B' ? 2 : 0,
+            initCourse: '2026-07-01',
+            endCourse: criterio === 'B' ? '2026-08-01' : '2026-08-14',
+          },
+        });
+        expect(patched.statusCode).toBe(200);
+        const preview = patched
+          .json()
+          .ordenes.find(
+            (e: { order: { orderNumber: string } }) => e.order.orderNumber === 'TEST-9600',
+          ).variablesAgente;
+        const tablero = (await app.inject({ method: 'GET', url: '/api/tablero' })).json();
+        expect(
+          tablero.cursos.find((c: { orderNumber: string }) => c.orderNumber === 'TEST-9600')
+            .variablesAgente,
+        ).toEqual(preview);
+        expect(fetchSpy).not.toHaveBeenCalled();
+        const call = await app.inject({
+          method: 'POST',
+          url: '/api/calls',
+          headers: { 'idempotency-key': randomUUID() },
+          payload: {
+            clientId: 'client_test_demo',
+            orderNumber: 'TEST-9600',
+            phone: TEL,
+            seccion: criterio === 'B' ? 'B_RIESGO_DJ' : 'A_RIESGO_CONEXION',
+          },
+        });
+        expect(call.statusCode).toBe(201);
+        const [url, request] = fetchSpy.mock.calls[0]!;
+        expect(url).toBe('https://api.elevenlabs.io/v1/convai/twilio/outbound-call');
+        const body = JSON.parse(request!.body as string);
+        expect(body.conversation_initiation_client_data.dynamic_variables).toEqual({
+          ...preview,
+          followup_id: call.json().followupId,
+        });
+        expect(preview.nombre_interlocutor).toBe('Francisca Rojas');
+        expect(preview.pct_conexion).toBe(criterio === 'B' ? '100%' : '12.5%');
+        expect(preview.motivo).toBe(
+          criterio === 'B' ? 'riesgo_dj_critico' : 'riesgo_conexion_critico',
+        );
+        expect(preview.dj_pendientes).toBe(criterio === 'B' ? '6' : '');
+        expect(preview.dias_restantes).toBe(criterio === 'B' ? '-10' : '3');
+        // Los nombres vacíos sirven para probar contexto incompleto: nunca enviar la OC
+        // como nombre de curso ni "Sin cliente", que son fallbacks visuales del agrupador.
+        await app.inject({
+          method: 'PATCH',
+          url: '/api/tablero/mock/orders/client_test_demo/TEST-9600',
+          payload: { contactoNombre: '', clientName: '', courseName: '' },
+        });
+        const incomplete = (await app.inject({ method: 'GET', url: '/api/tablero' }))
+          .json()
+          .cursos.find((c: { orderNumber: string }) => c.orderNumber === 'TEST-9600');
+        expect(incomplete.variablesAgente).toMatchObject({
+          nombre_cliente: '',
+          nombre_curso: '',
+          nombre_interlocutor: 'el encargado de capacitacion',
+        });
+        await app.inject({
+          method: 'POST',
+          url: '/api/calls',
+          headers: { 'idempotency-key': randomUUID() },
+          payload: {
+            clientId: 'client_test_demo',
+            orderNumber: 'TEST-9600',
+            phone: TEL,
+            seccion: criterio === 'B' ? 'B_RIESGO_DJ' : 'A_RIESGO_CONEXION',
+          },
+        });
+        expect(
+          JSON.parse(fetchSpy.mock.calls[1]![1]!.body as string).conversation_initiation_client_data
+            .dynamic_variables,
+        ).toMatchObject(incomplete.variablesAgente);
+      } finally {
+        fetchSpy.mockRestore();
+        await app.close();
+      }
+    },
+  );
   it('todos los casos usan el contexto que muestra el mock y respetan los casos no llamables', async () => {
     const { store } = await freshModules();
     const { originateManualCall } = await import('../../src/services/manual-call.js');
@@ -235,6 +254,7 @@ describe('mock-call-trigger', () => {
       nombre_curso: 'Curso actualizado',
       dias_restantes: '3',
       pct_conexion: '12.5%',
+      dj_pendientes: '',
       orden_compra: OC.orderNumber,
       motivo: 'riesgo_conexion_critico',
     });
@@ -246,7 +266,7 @@ describe('mock-call-trigger', () => {
     rules.nivelesQueLlaman = ['CRITICO', 'ALERTA'];
     rules.llamarSiPctMenorA[2] = 60;
     store.setCallRules(rules);
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     const e = store.evaluateAllMockOrders().find((c) => c.order.orderNumber === 'TEST-9101')!;
     const deps = await freshDeps();
     const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
@@ -270,7 +290,7 @@ describe('mock-call-trigger', () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
     await deps.contactRepository.markDoNotCall(TEL);
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(store);
     const result = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
     expect(result).toMatchObject({
@@ -289,7 +309,7 @@ describe('mock-call-trigger', () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
     const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(store);
     expect(store.updateMockOrder(OC.clientId, OC.orderNumber, { phone: SEGUNDO }).ok).toBe(true);
 
@@ -307,7 +327,7 @@ describe('mock-call-trigger', () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
     await deps.contactRepository.markDoNotCall(TEL);
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(store);
     store.updateMockOrder(OC.clientId, OC.orderNumber, { phone: SEGUNDO });
 
@@ -331,7 +351,7 @@ describe('mock-call-trigger', () => {
   it('con el toggle encendido, la transicion no->si origina la llamada', async () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(store);
 
     const r = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
@@ -344,7 +364,7 @@ describe('mock-call-trigger', () => {
   it('guardar de nuevo sin cambiar la condicion NO vuelve a llamar (sin transicion)', async () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(store);
 
     await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
@@ -357,7 +377,7 @@ describe('mock-call-trigger', () => {
   it('salir y volver a la condicion dentro del cooldown NO vuelve a llamar', async () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(store);
     await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
 
@@ -375,7 +395,7 @@ describe('mock-call-trigger', () => {
   it('pasado el cooldown, una nueva transicion si vuelve a llamar', async () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(store);
     await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
 
@@ -392,7 +412,7 @@ describe('mock-call-trigger', () => {
   it('una OC que no cumple la regla no llama aunque el toggle este encendido', async () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     store.updateMockOrder(OC.clientId, OC.orderNumber, { conexiones: 20 });
 
     const r = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
@@ -411,7 +431,7 @@ describe('mock-call-trigger', () => {
     const { store } = await freshModules();
     const { originateManualCall } = await import('../../src/services/manual-call.js');
     const deps = await freshDeps();
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(store);
 
     const r = await originateManualCall(
@@ -436,7 +456,7 @@ describe('mock-call-trigger', () => {
  * pero se prueba de punta a punta igual: es exactamente el tipo de cosa que un refactor rompe
  * sin que nadie se entere hasta que suena un telefono. Ver ADR-011.
  */
-describe('las secciones B y C no originan llamadas', () => {
+describe('criterio B llama por DJ; criterio C permanece fuera de voz', () => {
   const dia = 24 * 60 * 60 * 1000;
   const enDias = (n: number) => new Date(Date.now() + n * dia).toISOString().slice(0, 10);
 
@@ -449,45 +469,261 @@ describe('las secciones B y C no originan llamadas', () => {
     return store.updateMockOrder(OC.clientId, OC.orderNumber, { conexiones: 8, djs: 0 });
   }
 
-  it('una DJ CRITICA con las automaticas encendidas no llama a nadie', async () => {
+  it('el umbral DJ personalizado permite llamar en ALERTA y el dispatcher mantiene ese nivel', async () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
-    const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
-    store.setAutoCallEnabled(true);
-
     volverCriticaEnDj(store);
-    const e = store.evaluateAllMockOrders().find((c) => c.order.orderNumber === OC.orderNumber)!;
-    expect(e.dj.nivel).toBe('CRITICO');
-    expect(e.dj.enSeccion).toBe(true);
-
-    const result = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
-    expect(result.disparo).toBe(false);
-    expect(result.motivo).toBe('no_cumple_regla');
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it('bajar los umbrales de llamada al maximo tampoco alcanza para que la DJ llame', async () => {
-    // Los umbrales configurables son de la seccion A: no existe un umbral de DJ que tocar.
-    const { store, trigger } = await freshModules();
-    const deps = await freshDeps();
-    const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
+    store.updateMockOrder(OC.clientId, OC.orderNumber, { endCourse: enDias(-4) });
     const rules = store.getCallRules();
-    rules.nivelesQueLlaman = ['CRITICO', 'ALERTA', 'NORMAL'];
-    rules.llamarSiPctMenorA = { 1: 100, 2: 100, 3: 100, 4: 100 };
+    rules.dj = { llamarSiDiasMayorA: 3, nivelesQueLlaman: ['ALERTA'] };
     store.setCallRules(rules);
-    store.setAutoCallEnabled(true);
-
-    volverCriticaEnDj(store);
+    store.setAutoCallEnabled('B_RIESGO_DJ', true);
+    const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
+    const preview = store
+      .evaluateAllMockOrders()
+      .find((e) => e.order.orderNumber === OC.orderNumber)!;
+    expect(preview.dj.nivel).toBe('ALERTA');
     const result = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
-    expect(result.disparo).toBe(false);
+    expect(result.disparo).toBe(true);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ dynamicVariables: preview.variablesAgente }),
+    );
+    expect(await deps.followupRepository.getById(result.llamada!.followupId!)).toMatchObject({
+      contexto: { nivelDetectado: 'ALERTA', seccion: 'B_RIESGO_DJ' },
+    });
+  });
+  it('revalida la regla DJ si se desactiva después del prechequeo', async () => {
+    const { store } = await freshModules();
+    const deps = await freshDeps();
+    volverCriticaEnDj(store);
+    const { MockTableroApiClient } = await import('../../src/services/tablero-api-client.mock.js');
+    const { originateManualCall } = await import('../../src/services/manual-call.js');
+    const client = new MockTableroApiClient();
+    const search = client.search.bind(client);
+    let reads = 0;
+    vi.spyOn(client, 'search').mockImplementation(async (filters) => {
+      if (++reads === 2) {
+        const rules = store.getCallRules();
+        rules.dj.llamarSiDiasMayorA = null;
+        store.setCallRules(rules);
+      }
+      return search(filters);
+    });
+    const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
+    const result = await originateManualCall(
+      { ...OC, phone: TEL, idempotencyKey: randomUUID(), seccion: 'B_RIESGO_DJ' },
+      { ...deps, tableroClient: client },
+    );
+    expect(result.followupEstado).toBe('RESUELTO_SIN_LLAMADA');
+    expect(spy).not.toHaveBeenCalled();
+    expect((await deps.quotaRepository.peek(50)).usados).toBe(0);
+  });
+
+  it('DJ crítica con conexión completa llama por declaraciones y conserva preview, motivo y sección', async () => {
+    const { store, trigger } = await freshModules();
+    const deps = await freshDeps();
+    const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
+    store.setAutoCallEnabled('B_RIESGO_DJ', true);
+    volverCriticaEnDj(store);
+    store.updateMockOrder(OC.clientId, OC.orderNumber, { inscritos: 8, conexiones: 8, djs: 2 });
+    const e = store.evaluateAllMockOrders().find((c) => c.order.orderNumber === OC.orderNumber)!;
+    const result = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
+    expect(result.disparo).toBe(true);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ dynamicVariables: e.variablesAgente }),
+    );
+    expect(e.variablesAgente).toMatchObject({
+      motivo: 'riesgo_dj_critico',
+      pct_conexion: '100%',
+      dj_pendientes: '6',
+      dias_restantes: '-10',
+    });
+    expect(await deps.followupRepository.getById(result.llamada!.followupId!)).toMatchObject({
+      motivo: 'riesgo_dj_critico',
+      contexto: { seccion: 'B_RIESGO_DJ' },
+    });
+    expect((await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps)).motivo).toBe(
+      'sin_transicion',
+    );
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([3, 4, 7, 8])(
+    'B conserva su umbral propio a %s días aunque A habilite todos los niveles',
+    async (dias) => {
+      vi.setSystemTime(new Date('2026-08-11T00:00:00.000Z'));
+      const { store, trigger } = await freshModules();
+      const deps = await freshDeps();
+      const rules = store.getCallRules();
+      rules.nivelesQueLlaman = ['CRITICO', 'ALERTA', 'NORMAL'];
+      rules.llamarSiPctMenorA = { 1: 100, 2: 100, 3: 100, 4: 100 };
+      store.setCallRules(rules);
+      store.setAutoCallEnabled('B_RIESGO_DJ', true);
+      volverCriticaEnDj(store);
+      store.updateMockOrder(OC.clientId, OC.orderNumber, { endCourse: enDias(-dias) });
+      const result = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
+      expect(result.disparo).toBe(dias > 7);
+    },
+  );
+
+  it.each(['completa', 'sin_conectados', 'toggle', 'consentimiento', 'cuota', 'kill_switch'])(
+    'B respeta exclusión/control %s',
+    async (caso) => {
+      if (caso === 'kill_switch') process.env.KILL_SWITCH = 'true';
+      const { store, trigger } = await freshModules();
+      const deps = await freshDeps();
+      const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
+      store.setAutoCallEnabled('B_RIESGO_DJ', caso !== 'toggle');
+      volverCriticaEnDj(store);
+      if (caso === 'completa') store.updateMockOrder(OC.clientId, OC.orderNumber, { djs: 8 });
+      if (caso === 'sin_conectados')
+        store.updateMockOrder(OC.clientId, OC.orderNumber, { conexiones: 0 });
+      if (caso === 'consentimiento') await deps.contactRepository.markDoNotCall(TEL);
+      if (caso === 'cuota')
+        vi.spyOn(deps.quotaRepository, 'peek').mockResolvedValue({
+          dateKey: '2026-08-11',
+          usados: 50,
+          limite: 50,
+          restantes: 0,
+        });
+      const result = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
+      expect(result.disparo).toBe(false);
+      expect(spy).not.toHaveBeenCalled();
+    },
+  );
+
+  it('revalida DJ antes de marcar y cancela si se completaron, sin consumir cuota', async () => {
+    const { store } = await freshModules();
+    const { originateManualCall } = await import('../../src/services/manual-call.js');
+    const { MockTableroApiClient } = await import('../../src/services/tablero-api-client.mock.js');
+    volverCriticaEnDj(store);
+    const deps = await freshDeps();
+    const client = new MockTableroApiClient();
+    const search = client.search.bind(client);
+    let reads = 0;
+    vi.spyOn(client, 'search').mockImplementation(async (filters) => {
+      if (++reads === 2) store.updateMockOrder(OC.clientId, OC.orderNumber, { djs: 8 });
+      return search(filters);
+    });
+    const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
+    const result = await originateManualCall(
+      { ...OC, phone: TEL, idempotencyKey: randomUUID(), seccion: 'B_RIESGO_DJ' },
+      { ...deps, tableroClient: client },
+    );
+    expect(result.followupEstado).toBe('RESUELTO_SIN_LLAMADA');
+    expect(spy).not.toHaveBeenCalled();
+    expect((await deps.quotaRepository.peek(50)).usados).toBe(0);
+  });
+
+  it('un seguimiento de A no se reconvierte a B si el curso termina entre lecturas', async () => {
+    const { store } = await freshModules();
+    const { originateManualCall } = await import('../../src/services/manual-call.js');
+    const { MockTableroApiClient } = await import('../../src/services/tablero-api-client.mock.js');
+    volverCritica(store);
+    const deps = await freshDeps();
+    const client = new MockTableroApiClient();
+    const search = client.search.bind(client);
+    let reads = 0;
+    vi.spyOn(client, 'search').mockImplementation(async (filters) => {
+      if (++reads === 2) volverCriticaEnDj(store);
+      return search(filters);
+    });
+    const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
+    const result = await originateManualCall(
+      { ...OC, phone: TEL, idempotencyKey: randomUUID() },
+      { ...deps, tableroClient: client },
+    );
+    expect(result.followupEstado).toBe('RESUELTO_SIN_LLAMADA');
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['compromiso', 'RESUELTO'],
+    ['otic', 'ESCALADO'],
+    ['rechazo', 'CERRADO'],
+  ])('el post-call B conserva el resultado %s en seguimiento e historial', async (caso, estado) => {
+    const { store, trigger } = await freshModules();
+    const deps = await freshDeps();
+    store.setAutoCallEnabled('B_RIESGO_DJ', true);
+    volverCriticaEnDj(store);
+    const result = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
+    const conversationId = result.llamada!.conversationId!;
+    const { handleElevenLabsPostCall } =
+      await import('../../src/handlers/webhooks/elevenlabs-post-call/handler.js');
+    const { generateTestSignatureHeader } =
+      await import('../../src/auth/elevenlabs-signature-validator.js');
+    const raw = JSON.stringify({
+      type: 'post_call_transcription',
+      event_timestamp: Math.floor(Date.now() / 1000),
+      data: {
+        conversation_id: conversationId,
+        agent_id: 'test',
+        status: 'done',
+        analysis: {
+          data_collection_results: {
+            motivo_no_conexion: {
+              value: caso === 'rechazo' ? 'no_contactar' : 'declaraciones pendientes',
+            },
+            compromiso_fecha: { value: caso === 'compromiso' ? '15 de septiembre' : '' },
+            requiere_humano: { value: caso === 'otic' },
+            tiene_bloqueo_tecnico: { value: false },
+          },
+        },
+      },
+    });
+    const response = await handleElevenLabsPostCall(
+      raw,
+      generateTestSignatureHeader('secret', raw),
+      { ...deps, webhookSecret: 'secret' },
+    );
+    expect(response.statusCode).toBe(200);
+    expect(await deps.followupRepository.getById(result.llamada!.followupId!)).toMatchObject({
+      estado,
+      motivo: 'riesgo_dj_critico',
+      contexto: { seccion: 'B_RIESGO_DJ' },
+    });
+    if (caso === 'rechazo')
+      expect((await deps.contactRepository.getByPhone(TEL))?.doNotCall).toBe(true);
+  });
+
+  it.each(['CRITICO', 'ALERTA'] as const)(
+    'el evaluador crea B en %s con su regla y no lo duplica',
+    async (nivel) => {
+      process.env.DRY_RUN = 'false';
+      const { store } = await freshModules();
+      const deps = await freshDeps();
+      volverCriticaEnDj(store);
+      if (nivel === 'ALERTA') {
+        store.updateMockOrder(OC.clientId, OC.orderNumber, { endCourse: enDias(-4) });
+        const rules = store.getCallRules();
+        rules.dj = { llamarSiDiasMayorA: 3, nivelesQueLlaman: ['ALERTA'] };
+        store.setCallRules(rules);
+      }
+      const { runCandidateEvaluator } =
+        await import('../../src/handlers/candidate-evaluator/handler.js');
+      const { MockTableroApiClient } =
+        await import('../../src/services/tablero-api-client.mock.js');
+      const { InMemoryQueueClient } = await import('../../src/services/queue.js');
+      const queue = new InMemoryQueueClient();
+      const evaluatorDeps = { ...deps, tableroClient: new MockTableroApiClient(), queue };
+      const first = await runCandidateEvaluator(evaluatorDeps);
+      const created = first.created.find((item) => item.orderNumber === OC.orderNumber)!;
+      expect(created).toBeDefined();
+      expect(await deps.followupRepository.getById(created.followupId)).toMatchObject({
+        motivo: 'riesgo_dj_critico',
+        contexto: { seccion: 'B_RIESGO_DJ', nivelDetectado: nivel },
+      });
+      const second = await runCandidateEvaluator(evaluatorDeps);
+      expect(second.discarded).toContainEqual({ orderNumber: OC.orderNumber, motivo: 'duplicado' });
+    },
+  );
 
   it('una rectificacion CRITICA con las automaticas encendidas no llama a nadie', async () => {
     const { store, trigger } = await freshModules();
     const deps = await freshDeps();
     const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
+    store.setAutoCallEnabled('B_RIESGO_DJ', true);
 
     store.updateMockOrder(OC.clientId, OC.orderNumber, {
       orderStatus: 'ESPERA OC FINAL',
@@ -509,7 +745,7 @@ describe('las secciones B y C no originan llamadas', () => {
     const deps = await freshDeps();
     const spy = vi.spyOn(deps.elevenLabsClient, 'startOutboundCall');
     volverCritica(store);
-    store.setAutoCallEnabled(true);
+    store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     // Primer flanco: esta llamada SI es legitima (seccion A), y deja el latch armado.
     const primera = await trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
     expect(primera.disparo).toBe(true);
@@ -534,14 +770,14 @@ describe('idempotencia entre corridas del store', () => {
     const deps = await freshDeps();
 
     const primera = await freshModules();
-    primera.store.setAutoCallEnabled(true);
+    primera.store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(primera.store);
     const r1 = await primera.trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
     expect(r1.llamada?.status).toBe('dialing');
 
     // Misma tabla (mismos locks persistidos), store sembrado de nuevo.
     const segunda = await freshModules();
-    segunda.store.setAutoCallEnabled(true);
+    segunda.store.setAutoCallEnabled('A_RIESGO_CONEXION', true);
     volverCritica(segunda.store);
     const r2 = await segunda.trigger.maybeTriggerMockCall(OC.clientId, OC.orderNumber, deps);
 

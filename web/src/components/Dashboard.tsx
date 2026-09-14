@@ -4,6 +4,13 @@ import { api } from '../api';
 import { EstadoBadge } from './Badge';
 import type { CallDetalleResponse, LlamadaResumen, SyncResponse } from '../types';
 
+/** De donde salio el resultado de una llamada. `twilio` = no hubo conversacion que traer. */
+const ORIGEN_DEL_DATO: Record<string, string> = {
+  webhook: 'webhook post-call',
+  sync: 'sincronizado por API',
+  twilio: 'estado final de Twilio (sin conversacion)',
+};
+
 function formatearDuracion(segundos: number | null): string {
   if (segundos === null || segundos === undefined) return '—';
   const m = Math.floor(segundos / 60);
@@ -202,9 +209,15 @@ function FilaLlamada({ llamada }: { llamada: LlamadaResumen }) {
                       <span>{formatearDuracion(c.durationSeconds)}</span>
                       <span className="uv-kv__k">corte</span>
                       <span>{c.terminationReason ?? '—'}</span>
+                      <span className="uv-kv__k">estado en Twilio</span>
+                      <span>
+                        {c.twilio
+                          ? `${c.twilio.status}${c.twilio.answeredBy ? ` (${c.twilio.answeredBy})` : ''}`
+                          : 'no consultado'}
+                      </span>
                       <span className="uv-kv__k">origen del dato</span>
                       <span>
-                        {c.fuente === 'sync' ? 'sincronizado por API' : 'webhook post-call'}
+                        {ORIGEN_DEL_DATO[c.fuente] ?? c.fuente}
                         {c.cost === null ? null : (
                           <span className="uv-note"> · {c.cost} creditos</span>
                         )}
@@ -312,6 +325,15 @@ export function Dashboard({
           Sincronizacion: <strong>{resumenSync.registradas}</strong> resultado(s) nuevo(s) ·{' '}
           {resumenSync.yaRegistradas} ya estaban · {resumenSync.noFinales} aun en curso ·{' '}
           {resumenSync.noAtribuibles} no atribuibles · {resumenSync.errores} error(es).
+          {!resumenSync.twilio ? null : resumenSync.twilio.consultado ? (
+            <>
+              {' '}
+              Twilio: <strong>{resumenSync.twilio.dialingResueltos}</strong> seguimiento(s) en
+              DIALING resuelto(s) con el estado final de la llamada.
+            </>
+          ) : (
+            <> Twilio no se consulto: {resumenSync.twilio.motivo}</>
+          )}
           {resumenSync.noAtribuibles > 0 ? (
             <>
               {' '}

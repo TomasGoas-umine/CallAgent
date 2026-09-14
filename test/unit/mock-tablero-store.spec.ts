@@ -78,8 +78,22 @@ describe('mock-tablero-store', () => {
     expect(getMockOrder(NORMAL.clientId, NORMAL.orderNumber)).not.toBeNull();
   });
 
-  it('las llamadas automaticas arrancan APAGADAS', () => {
-    expect(isAutoCallEnabled()).toBe(false);
+  it('las llamadas automaticas arrancan APAGADAS en las DOS secciones de voz', () => {
+    expect(isAutoCallEnabled('A_RIESGO_CONEXION')).toBe(false);
+    expect(isAutoCallEnabled('B_RIESGO_DJ')).toBe(false);
+  });
+
+  it('cada seccion tiene su propio interruptor: encender una no enciende la otra', () => {
+    // Es la garantia del pedido: probar riesgo de conexion no puede dejar armadas las llamadas
+    // de declaraciones juradas, ni al reves. Son dos conversaciones distintas.
+    setAutoCallEnabled('A_RIESGO_CONEXION', true);
+    expect(isAutoCallEnabled('A_RIESGO_CONEXION')).toBe(true);
+    expect(isAutoCallEnabled('B_RIESGO_DJ')).toBe(false);
+
+    setAutoCallEnabled('B_RIESGO_DJ', true);
+    setAutoCallEnabled('A_RIESGO_CONEXION', false);
+    expect(isAutoCallEnabled('A_RIESGO_CONEXION')).toBe(false);
+    expect(isAutoCallEnabled('B_RIESGO_DJ')).toBe(true);
   });
 
   it('toda OC arranca en el numero de pruebas por defecto', () => {
@@ -419,7 +433,7 @@ describe('mock-tablero-store', () => {
       expect(e.dj.motivoFuera).toBe('curso_no_terminado');
     });
 
-    it('una DJ critica NO habilita ninguna llamada', () => {
+    it('una DJ critica habilita seguimiento de declaraciones', () => {
       // Es la garantia que pide el negocio: la DJ se resuelve con el OTIC, no por telefono.
       cerrarCurso(0, 8);
       const e = evaluateMockOrder(
@@ -427,7 +441,7 @@ describe('mock-tablero-store', () => {
         getCallRules(),
       );
       expect(e.dj.nivel).toBe('CRITICO');
-      expect(e.regla.dispara).toBe(false);
+      expect(e.regla.dispara).toBe(true);
       expect(e.enSeccionA).toBe(false);
     });
 
@@ -455,6 +469,76 @@ describe('mock-tablero-store', () => {
       expect(updateMockOrder(NORMAL.clientId, NORMAL.orderNumber, { djs: 1.5 }).ok).toBe(false);
     });
   });
+
+  // Fuente: ../semaforo-reglas-negocio/StatusCursosPage.tsx:83-87,582-657,1245.
+  it.each([
+    [3, false, 'NORMAL'],
+    [4, true, 'ALERTA'],
+    [7, true, 'ALERTA'],
+    [8, true, 'CRITICO'],
+  ])(
+    'B a %s días coincide con la fuente, aunque se cambie la regla de llamada',
+    (dias, visible, nivel) => {
+      vi.setSystemTime(
+        new Date(new Date(FIXTURE_REFERENCE_NOW).toISOString().slice(0, 10) + 'T00:00:00Z'),
+      );
+      expect(
+        updateMockOrder(NORMAL.clientId, NORMAL.orderNumber, {
+          initCourse: enDias(-40),
+          endCourse: enDias(-(dias as number)),
+          conexiones: 8,
+          djs: 2,
+        }).ok,
+      ).toBe(true);
+      const order = getMockOrder(NORMAL.clientId, NORMAL.orderNumber)!;
+      const rules = getCallRules();
+      const before = evaluateMockOrder(order, rules);
+      rules.dj = { llamarSiDiasMayorA: 0, nivelesQueLlaman: ['NORMAL', 'ALERTA', 'CRITICO'] };
+      const after = evaluateMockOrder(order, rules);
+      expect(after.dj).toEqual(before.dj);
+      expect(after.dj).toMatchObject({ enSeccion: visible, nivel, base: 8, conDj: 2, pctDj: 25 });
+      expect(after.regla.dispara).toBe(visible);
+    },
+  );
+  it.each([
+    [3, false, 'NORMAL'],
+    [4, true, 'NORMAL'],
+    [15, true, 'NORMAL'],
+    [16, true, 'ALERTA'],
+    [30, true, 'ALERTA'],
+    [31, true, 'CRITICO'],
+  ])('C permite EN RECTIFICACION y respeta el corte de %s días', (dias, visible, nivel) => {
+    vi.setSystemTime(
+      new Date(new Date(FIXTURE_REFERENCE_NOW).toISOString().slice(0, 10) + 'T00:00:00Z'),
+    );
+    expect(
+      updateMockOrder(NORMAL.clientId, NORMAL.orderNumber, {
+        orderStatus: 'EN RECTIFICACION',
+        ultimaActualizacion: enDias(-(dias as number)),
+      }).ok,
+    ).toBe(true);
+    const e = evaluateMockOrder(getMockOrder(NORMAL.clientId, NORMAL.orderNumber)!, getCallRules());
+    expect(e.rectificacion).toMatchObject({ diasPendiente: dias, enSeccion: visible, nivel });
+    expect(e.regla.dispara).toBe(false);
+  });
+  it.each(['OCF SOLICITADA', 'OC RECIBIDA'])(
+    'conserva el estado manual %s y no inventa entrada en C',
+    (orderStatus) => {
+      expect(
+        updateMockOrder(NORMAL.clientId, NORMAL.orderNumber, {
+          orderStatus,
+          ultimaActualizacion: enDias(-40),
+        }).ok,
+      ).toBe(true);
+      const e = evaluateMockOrder(
+        getMockOrder(NORMAL.clientId, NORMAL.orderNumber)!,
+        getCallRules(),
+      );
+      expect(e.order.orderStatus).toBe(orderStatus);
+      expect(e.enSeccionA).toBe(false);
+      expect(e.rectificacion.enSeccion).toBe(false);
+    },
+  );
 
   describe('seccion C - Rectificacion', () => {
     it('clasifica por dias desde la ultima actualizacion de la OC', () => {
@@ -531,15 +615,18 @@ describe('mock-tablero-store', () => {
     expect(e.enSeccionA).toBe(false);
     expect(e.dj.enSeccion).toBe(true);
     expect(e.rectificacion.enSeccion).toBe(true);
-    expect(e.regla.dispara).toBe(false);
+    expect(e.regla.dispara).toBe(true);
+    expect(e.variablesAgente.motivo).toBe('riesgo_dj_critico');
   });
 
   it('reset devuelve datos, umbrales y toggle al estado inicial', () => {
     updateMockOrder(NORMAL.clientId, NORMAL.orderNumber, { inscritos: 1, conexiones: 0 });
-    setAutoCallEnabled(true);
+    setAutoCallEnabled('A_RIESGO_CONEXION', true);
+    setAutoCallEnabled('B_RIESGO_DJ', true);
     resetMockStore();
     expect(getMockOrder(NORMAL.clientId, NORMAL.orderNumber)?.inscritos).toBeGreaterThan(1);
-    expect(isAutoCallEnabled()).toBe(false);
+    expect(isAutoCallEnabled('A_RIESGO_CONEXION')).toBe(false);
+    expect(isAutoCallEnabled('B_RIESGO_DJ')).toBe(false);
     expect(evaluateAllMockOrders().length).toBeGreaterThan(10);
   });
 });

@@ -18,6 +18,7 @@ import type {
   Health,
   MockOrderPatch,
   MockTableroResponse,
+  SeccionDeVoz,
   SyncResponse,
   TableroOriginalResponse,
   TableroResponse,
@@ -96,10 +97,11 @@ export const api = {
     }),
   resetCallRules: () =>
     request<MockTableroResponse>('/tablero/mock/call-rules/reset', { method: 'POST' }),
-  setAutoCall: (enabled: boolean) =>
+  /** El interruptor es POR SECCION; el backend rechaza el patch si no viene la seccion. */
+  setAutoCall: (seccion: SeccionDeVoz, enabled: boolean) =>
     request<MockTableroResponse>('/tablero/mock/auto-call', {
       method: 'PUT',
-      body: JSON.stringify({ enabled }),
+      body: JSON.stringify({ seccion, enabled }),
     }),
 
   // --- Tablero Original (dato real, estrictamente de lectura) ---
@@ -125,6 +127,7 @@ export const api = {
   async disparar(body: {
     clientId: string;
     orderNumber: string;
+    seccion?: 'A_RIESGO_CONEXION' | 'B_RIESGO_DJ';
     phone: string;
     requestedBy?: string;
     idempotencyKey: string;
@@ -135,6 +138,7 @@ export const api = {
       body: JSON.stringify({
         clientId: body.clientId,
         orderNumber: body.orderNumber,
+        seccion: body.seccion,
         phone: body.phone,
         requestedBy: body.requestedBy,
       }),

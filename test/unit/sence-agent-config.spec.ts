@@ -61,6 +61,7 @@ describe('contrato del workflow Sence', () => {
     for (const id of [
       'identificacion',
       'contexto',
+      'contexto_dj',
       'diagnostico',
       'soporte',
       'acuerdo',
@@ -73,6 +74,17 @@ describe('contrato del workflow Sence', () => {
       expect(exits).toContain('reagendar');
       expect(exits).toContain('no_disponible');
     }
+  });
+
+  it('mantiene acotado el contexto activo y separa la entrada de DJ del criterio A', () => {
+    expect(config.conversation_config.agent.prompt.prompt.length).toBeLessThan(5500);
+    expect(config.workflow.nodes.contexto_dj!.additional_prompt!.length).toBeLessThan(1100);
+    expect(
+      config.workflow.edges.identificacion_to_contexto_dj!.forward_condition.condition,
+    ).toContain('riesgo_dj_critico');
+    expect(config.workflow.edges.identificacion_to_contexto!.forward_condition.condition).toContain(
+      'NO es riesgo_dj_critico',
+    );
   });
 
   it('extrae los cinco campos consumidos por el backend con booleanos reales', () => {

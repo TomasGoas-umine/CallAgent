@@ -17,9 +17,7 @@
  * `courseRows` (`StatusCursosPage.tsx:528/582/626`). Releerlo por seccion serian tres lecturas
  * de ~6.000 registros para el mismo dato.
  *
- * Solo la seccion A puede terminar en una llamada. B y C se leen para MOSTRARLAS
- * (`GET /api/tablero/original`) y no entran en `call-rules.ts` ni en ningun camino de
- * originacion — ver ADR-011 y docs/SEMAFORO_INTEGRACION.md §3.
+ * `readCallSemaforo` compone A y B para voz; C solo se muestra (ADR-012).
  */
 
 import { groupOrders, type GroupOrdersStats, type OrderGroup } from './order-status-promoter.js';
@@ -44,9 +42,14 @@ import type { TableroApiClient } from './tablero-api-client.js';
 import type { CourseWeek, UrgencyLevel } from '../domain/candidate.js';
 import { logger } from '../utils/logger.js';
 import { courseDaysRemaining } from '../utils/dates.js';
-import { evaluarReglaDeLlamada } from './call-rules.js';
+import { evaluarReglaDj, evaluarReglaDeLlamada } from './call-rules.js';
+
+import type { CallSection } from '../domain/followup.js';
 
 export interface CourseEvaluation {
+  /** Ausente en evaluaciones antiguas: criterio A. */
+  seccion?: CallSection;
+  dj?: DjEvaluation;
   group: OrderGroup;
   semana: CourseWeek;
   nivel: UrgencyLevel;
@@ -59,7 +62,7 @@ export interface CourseEvaluation {
    * nivel no es NORMAL (`StatusCursosPage.tsx:568` descarta NORMAL de la tabla).
    */
   visibleEnSemaforo: boolean;
-  /** `true` si califica para el unico caso de uso del MVP: seccion A + nivel CRITICO. */
+  /** `true` si la sección de voz está en nivel CRITICO. */
   candidatoALlamada: boolean;
 }
 
@@ -117,7 +120,7 @@ export interface RectificacionEvaluation {
 
 /** Las tres secciones del Semaforo resueltas de una sola lectura. */
 export interface SemaforoSecciones extends SemaforoRead {
-  /** Seccion B - Riesgo DJ. Se muestra; nunca decide una llamada. */
+  /** Seccion B - Riesgo DJ. Alimenta también readCallSemaforo. */
   seccionB: DjEvaluation[];
   /** Seccion C - Rectificacion. Se muestra; nunca decide una llamada. */
   seccionC: RectificacionEvaluation[];
@@ -129,6 +132,13 @@ export const diasRestantes = courseDaysRemaining;
 /** Solo el banco Mock ofrece reglas de prueba. Las fuentes reales conservan CRITICO. */
 export function isCourseCallable(client: TableroApiClient, evaluation: CourseEvaluation): boolean {
   const rules = client.getTestCallRules?.();
+  if (evaluation.seccion === 'B_RIESGO_DJ')
+    return evaluarReglaDj(
+      Boolean(evaluation.dj),
+      evaluation.nivel,
+      evaluation.dj?.diasDesdeCierre ?? NaN,
+      rules?.dj,
+    ).dispara;
   return rules
     ? evaluarReglaDeLlamada(
         rules,
@@ -263,29 +273,55 @@ export async function readSemaforoSecciones(client: TableroApiClient): Promise<S
 }
 
 /**
- * Las OCs de la seccion A ya clasificadas. Es lo que usan el dispatcher, el disparo manual y
- * `GET /api/tablero`: ninguno de los tres mira B ni C.
+ * Vista compatible de la sección A. Los caminos de voz usan readCallSemaforo.
  */
 export async function readSemaforo(client: TableroApiClient): Promise<SemaforoRead> {
   const { evaluaciones, stats } = await readSemaforoSecciones(client);
   return { evaluaciones, stats };
 }
 
-/** Todos los cursos de la seccion A del Semaforo, ya agrupados y clasificados. */
+/** Cursos de las secciones de voz A y B, ya agrupados y clasificados. */
 export async function listCourseEvaluations(client: TableroApiClient): Promise<CourseEvaluation[]> {
-  const { evaluaciones } = await readSemaforo(client);
+  const { evaluaciones } = await readCallSemaforo(client);
   return evaluaciones;
 }
 
-/** Un curso puntual (`client_id` + `order_number`), o `null` si ya no aparece en la seccion A. */
+/** Un curso puntual (`client_id` + `order_number`), o `null` si ya no aparece en la sección solicitada. */
 export async function findCourseEvaluation(
   client: TableroApiClient,
   clientId: string,
   orderNumber: string,
+  seccion?: CallSection,
 ): Promise<CourseEvaluation | null> {
   const evaluations = await listCourseEvaluations(client);
   return (
-    evaluations.find((e) => e.group.clientId === clientId && e.group.orderNumber === orderNumber) ??
-    null
+    evaluations.find(
+      (e) =>
+        e.group.clientId === clientId &&
+        e.group.orderNumber === orderNumber &&
+        (!seccion || (e.seccion ?? 'A_RIESGO_CONEXION') === seccion),
+    ) ?? null
   );
+}
+
+/** Candidatos de voz A y B. C sigue siendo solo lectura; stats conserva el contrato de A. */
+export async function readCallSemaforo(client: TableroApiClient): Promise<SemaforoRead> {
+  const { evaluaciones, seccionB, stats } = await readSemaforoSecciones(client);
+  return {
+    stats,
+    evaluaciones: [
+      ...evaluaciones,
+      ...seccionB.map((dj): CourseEvaluation => ({
+        group: dj.group,
+        seccion: 'B_RIESGO_DJ',
+        dj,
+        semana: getCourseWeek(dj.group.initCourse, dj.group.endCourse),
+        nivel: dj.nivel,
+        diasRestantes: diasRestantes(dj.group.endCourse),
+        contactoNombre: dj.group.records[0]?.contacto_nombre ?? null,
+        visibleEnSemaforo: true,
+        candidatoALlamada: evaluarReglaDj(true, dj.nivel, dj.diasDesdeCierre).dispara,
+      })),
+    ],
+  };
 }

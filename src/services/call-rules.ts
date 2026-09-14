@@ -16,10 +16,17 @@
  * en el tablero no cambia nunca.
  */
 
-import { WEEK_THRESHOLDS } from './urgency-classifier.js';
+import { DJ_THRESHOLDS, WEEK_THRESHOLDS } from './urgency-classifier.js';
 import type { CourseWeek, UrgencyLevel } from '../domain/candidate.js';
 
+export interface DjCallRules {
+  /** Llamar cuando los días calculados desde el cierre sean estrictamente mayores. null desactiva. */
+  llamarSiDiasMayorA: number | null;
+  nivelesQueLlaman: UrgencyLevel[];
+}
+
 export interface CallRules {
+  dj: DjCallRules;
   /**
    * Por semana de curso: llamar si `pctConexion < umbral`. `null` = esa semana nunca llama.
    * Los defaults son los `criticoBelow` del Semaforo (S1 no tiene banda CRITICO).
@@ -42,12 +49,19 @@ export function defaultCallRules(): CallRules {
       4: WEEK_THRESHOLDS[4].criticoBelow,
     },
     nivelesQueLlaman: ['CRITICO'],
+    dj: { llamarSiDiasMayorA: DJ_THRESHOLDS.criticoDias, nivelesQueLlaman: ['CRITICO'] },
   };
 }
 
 export interface CallRuleDecision {
   dispara: boolean;
-  motivo: 'umbral_alcanzado' | 'nivel_no_habilitado' | 'semana_sin_umbral' | 'sobre_el_umbral';
+  motivo:
+    | 'umbral_alcanzado'
+    | 'nivel_no_habilitado'
+    | 'semana_sin_umbral'
+    | 'sobre_el_umbral'
+    | 'umbral_desactivado'
+    | 'dias_insuficientes';
   umbral: number | null;
 }
 
@@ -78,10 +92,12 @@ export function evaluarReglaDeLlamada(
 /** Valida un patch de reglas venido del micrositio. El front no valida nada: se valida aca. */
 export function validarCallRules(
   input: unknown,
+  current: CallRules = defaultCallRules(),
 ): { ok: true; rules: CallRules } | { ok: false; error: string } {
-  if (typeof input !== 'object' || input === null) return { ok: false, error: 'cuerpo invalido' };
+  if (typeof input !== 'object' || input === null || Array.isArray(input))
+    return { ok: false, error: 'cuerpo invalido' };
   const raw = input as Partial<CallRules>;
-  const base = defaultCallRules();
+  const base = structuredClone(current);
   const umbrales = { ...base.llamarSiPctMenorA };
 
   if (raw.llamarSiPctMenorA !== undefined) {
@@ -114,5 +130,45 @@ export function validarCallRules(
     niveles = [...new Set(raw.nivelesQueLlaman)];
   }
 
-  return { ok: true, rules: { llamarSiPctMenorA: umbrales, nivelesQueLlaman: niveles } };
+  const dj = { ...base.dj };
+  if (raw.dj !== undefined) {
+    if (!raw.dj || typeof raw.dj !== 'object' || Array.isArray(raw.dj))
+      return { ok: false, error: 'dj debe ser un objeto' };
+    const dias = raw.dj.llamarSiDiasMayorA;
+    if (dias !== undefined) {
+      if (dias !== null && (!Number.isSafeInteger(dias) || dias < 0))
+        return { ok: false, error: 'El umbral DJ debe ser null o un entero no negativo' };
+      dj.llamarSiDiasMayorA = dias;
+    }
+    if (raw.dj.nivelesQueLlaman !== undefined) {
+      const lista = raw.dj.nivelesQueLlaman;
+      if (
+        !Array.isArray(lista) ||
+        lista.length === 0 ||
+        lista.some((n) => !['NORMAL', 'ALERTA', 'CRITICO'].includes(n))
+      )
+        return {
+          ok: false,
+          error: 'Los niveles DJ deben ser una lista no vacía de niveles válidos',
+        };
+      dj.nivelesQueLlaman = [...new Set(lista)];
+    }
+  }
+  return { ok: true, rules: { llamarSiPctMenorA: umbrales, nivelesQueLlaman: niveles, dj } };
+}
+
+/** B conserva su gate; solo se configuran la decisión de llamar y los niveles admitidos. */
+export function evaluarReglaDj(
+  enSeccion: boolean,
+  nivel: UrgencyLevel | null,
+  diasDesdeCierre: number,
+  rules: DjCallRules = defaultCallRules().dj,
+): CallRuleDecision {
+  const umbral = rules.llamarSiDiasMayorA;
+  if (!enSeccion || nivel === null || !rules.nivelesQueLlaman.includes(nivel))
+    return { dispara: false, motivo: 'nivel_no_habilitado', umbral };
+  if (umbral === null) return { dispara: false, motivo: 'umbral_desactivado', umbral };
+  if (!Number.isFinite(diasDesdeCierre) || diasDesdeCierre <= umbral)
+    return { dispara: false, motivo: 'dias_insuficientes', umbral };
+  return { dispara: true, motivo: 'umbral_alcanzado', umbral };
 }

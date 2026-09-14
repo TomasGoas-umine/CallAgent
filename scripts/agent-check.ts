@@ -62,14 +62,28 @@ async function main() {
   check(
     'Instrucciones de todas las etapas coinciden',
     Object.entries(local.workflow.nodes).every(
-      ([id, node]) => remote.workflow.nodes[id]?.additional_prompt === node.additional_prompt,
+      ([id, node]) =>
+        remote.workflow.nodes[id]?.additional_prompt === node.additional_prompt &&
+        JSON.stringify(remote.workflow.nodes[id]?.edge_order) === JSON.stringify(node.edge_order),
     ),
+  );
+  check(
+    'Transiciones de ambos criterios coinciden',
+    Object.entries(local.workflow.edges).every(([id, edge]) => {
+      const actual = remote.workflow.edges[id];
+      return (
+        actual?.source === edge.source &&
+        actual?.target === edge.target &&
+        actual?.forward_condition.condition === edge.forward_condition.condition &&
+        actual?.backward_condition?.condition === edge.backward_condition?.condition
+      );
+    }),
   );
   if (env.elevenlabsAgentBranchId)
     check('Rama seleccionada coincide', remote.branch_id === env.elevenlabsAgentBranchId);
   const cases = evaluateAllMockOrders();
   check(
-    `Los ${cases.length} casos del mock producen las siete variables sin plantillas pendientes`,
+    `Los ${cases.length} casos del mock producen las ${keys.length} variables sin plantillas pendientes`,
     cases.every(
       (c) =>
         JSON.stringify(Object.keys(c.variablesAgente).sort()) === JSON.stringify(keys) &&

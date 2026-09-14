@@ -12,9 +12,7 @@
  * Son tres vistas del MISMO juego de OCs, no tres listas distintas: una OC se evalua por los
  * tres criterios a la vez y cada tabla edita los campos que gobiernan SU criterio.
  *
- * **Solo la seccion A puede llamar.** B y C se ven y se editan, pero ninguna alimenta la regla
- * de llamada: eso se decide en el backend (`mock-tablero-store` arma `regla` unicamente desde la
- * seccion A) y aca ni siquiera existe la columna «¿Llama?» en esas dos tablas.
+ * A y B permiten llamadas; C sigue informativa. El backend decide `regla` (ADR-012).
  *
  * REGLA ARQUITECTONICA (la misma que el resto del micrositio): esta vista NO clasifica nada.
  * No hay umbrales, ni semanas, ni estados hardcodeados — hasta la lista de estados del
@@ -36,6 +34,7 @@ import type {
   MockTriggerOutcome,
   MotivoFueraDeSeccion,
   Nivel,
+  SeccionDeVoz,
 } from '../types';
 
 type Borrador = Pick<
@@ -133,7 +132,6 @@ export function TableroMock({
   onGuardar,
   onToggleAutoCall,
   onGuardarReglas,
-  onRestaurarReglas,
   onReset,
 }: {
   data: MockTableroResponse | null;
@@ -141,13 +139,14 @@ export function TableroMock({
   error: string | null;
   onRecargar: () => void;
   onGuardar: (clientId: string, orderNumber: string, patch: MockOrderPatch) => Promise<void>;
-  onToggleAutoCall: (enabled: boolean) => void;
+  onToggleAutoCall: (seccion: SeccionDeVoz, enabled: boolean) => void;
   onGuardarReglas: (rules: CallRules) => void;
   onRestaurarReglas: () => void;
   onReset: () => void;
 }) {
   const [borradores, setBorradores] = useState<Record<string, Borrador>>({});
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [modalDjAbierto, setModalDjAbierto] = useState(false);
   const [guardando, setGuardando] = useState<string | null>(null);
 
   const clave = (e: MockOrderEvaluation) => `${e.order.clientId}#${e.order.orderNumber}`;
@@ -190,6 +189,17 @@ export function TableroMock({
   };
 
   const criticasQueLlaman = useMemo(() => ordenes.filter((o) => o.regla.dispara).length, [ordenes]);
+  /** Cuantas OCs cumplen la regla DE CADA SECCION — el banner de cada vineta necesita la suya. */
+  const enCondicion = useMemo(
+    () => ({
+      A_RIESGO_CONEXION: ordenes.filter((o) => o.regla.dispara && o.seccion === 'A_RIESGO_CONEXION')
+        .length,
+      B_RIESGO_DJ: ordenes.filter((o) => o.regla.dispara && o.seccion === 'B_RIESGO_DJ').length,
+    }),
+    [ordenes],
+  );
+  const autoCall = data?.autoCallEnabled;
+  const algunaEncendida = Boolean(autoCall?.A_RIESGO_CONEXION || autoCall?.B_RIESGO_DJ);
   const enB = useMemo(() => ordenes.filter((o) => o.dj.enSeccion).length, [ordenes]);
   const enC = useMemo(() => ordenes.filter((o) => o.rectificacion.enSeccion).length, [ordenes]);
   const enA = useMemo(() => ordenes.filter((o) => o.enSeccionA).length, [ordenes]);
@@ -199,15 +209,9 @@ export function TableroMock({
       <div className="uv-panel__header">
         <h2 className="uv-panel__title">Tablero Mock — datos simulados, editables</h2>
         <div className="uv-controls">
-          <label className="uv-field uv-field--inline">
-            <input
-              type="checkbox"
-              checked={data?.autoCallEnabled ?? false}
-              disabled={!data || cargando}
-              onChange={(ev) => onToggleAutoCall(ev.target.checked)}
-            />
-            <span className="uv-field__label">Llamadas automaticas del Mock</span>
-          </label>
+          {/* El interruptor de llamadas automaticas NO vive aca: hay uno POR SECCION, dentro de
+              la vineta de cada tablero. Uno global obligaba a saber de memoria a que criterio
+              aplicaba, y encender para probar conexion dejaba armadas tambien las de DJ. */}
           <button className="uv-button" onClick={onRecargar} disabled={cargando}>
             {cargando ? 'Cargando…' : 'Refrescar'}
           </button>
@@ -222,30 +226,21 @@ export function TableroMock({
       <p className="uv-note">
         {ordenes.length} OCs simuladas · {criticasQueLlaman} en condicion de llamar. Las mismas OCs
         se evaluan por los <strong>tres criterios</strong> del Semaforo, uno por seccion; cada
-        seccion se abre y se cierra por separado. Solo la seccion{' '}
-        <strong>A · Riesgo Conexion</strong> puede originar una llamada: cada OC llama a uno de los
-        numeros de pruebas autorizados (
+        seccion se abre y se cierra por separado. Las secciones{' '}
+        <strong>A · Riesgo Conexion y B · Riesgo DJ</strong> pueden originar llamadas: cada OC llama
+        a uno de los numeros de pruebas autorizados (
         <strong>{(data?.telefonos ?? []).map((t) => t.masked).join(' · ') || '—'}</strong>), que se
-        elige por OC en el detalle de la fila. Editar y guardar una fila de la seccion A puede
-        originar una <strong>llamada telefonica real</strong> si el interruptor de arriba esta
-        encendido. El <strong>Estado OC</strong> lo mandan las fechas: el backend no guarda un
-        estado que el inicio o el termino contradigan.
+        elige por OC en el detalle de la fila. Editar y guardar una fila puede originar una{' '}
+        <strong>llamada telefonica real</strong> si el interruptor de arriba esta encendido. El{' '}
+        <strong>Estado OC</strong> lo mandan las fechas: el backend no guarda un estado que el
+        inicio o el termino contradigan.
       </p>
 
-      {data && !data.autoCallEnabled ? (
+      {data && !algunaEncendida ? (
         <div className="uv-banner uv-banner--info">
-          Las llamadas automaticas estan <strong>apagadas</strong>. Podes editar libremente: no se
-          va a llamar a nadie. Encenderlas tampoco llama por si solo — hace falta guardar una
-          edicion que lleve una OC a la condicion configurada.
-        </div>
-      ) : null}
-      {data?.autoCallEnabled ? (
-        <div className="uv-banner uv-banner--info" role="status">
-          Automaticas activadas: <strong>esperando una transicion de NO a SI al guardar</strong>.{' '}
-          Encender el interruptor no llama a los {criticasQueLlaman} cursos que ya cumplen la regla
-          ni los deja en una cola. Para probar uno de ellos, guarda primero una edicion que lo deje
-          en «¿Llama? = NO» y despues otra que lo devuelva a «SI». Solo ese ultimo guardado intenta
-          llamar a nadie.
+          Las llamadas automaticas estan <strong>apagadas en las dos secciones</strong>. Podes
+          editar libremente: no se va a llamar a nadie. Cada tablero tiene su propio interruptor, en
+          su vineta.
         </div>
       ) : null}
       {(data?.telefonos ?? [])
@@ -286,28 +281,45 @@ export function TableroMock({
 
       <Seccion
         titulo={`A · ${SECCION_A}`}
+        tono="a"
         pregunta="¿que OCs corriendo van atrasadas en % de conexion para su semana de curso?"
         enSeccion={enA}
         total={ordenes.length}
         llama
         abiertaPorDefecto
+        autoCall={{
+          seccion: 'A_RIESGO_CONEXION',
+          activo: autoCall?.A_RIESGO_CONEXION ?? false,
+          enCondicion: enCondicion.A_RIESGO_CONEXION,
+          deshabilitado: !data || cargando,
+          onToggle: onToggleAutoCall,
+        }}
       >
         <TablaConexion ordenes={ordenes} editor={editor} cargando={cargando} />
       </Seccion>
 
       <Seccion
         titulo={`B · ${SECCION_B}`}
+        tono="b"
         pregunta="¿que cursos ya cerrados tienen conectados sin Declaracion Jurada?"
         enSeccion={enB}
         total={ordenes.length}
-        llama={false}
+        llama
         abiertaPorDefecto={false}
+        autoCall={{
+          seccion: 'B_RIESGO_DJ',
+          activo: autoCall?.B_RIESGO_DJ ?? false,
+          enCondicion: enCondicion.B_RIESGO_DJ,
+          deshabilitado: !data || cargando,
+          onToggle: onToggleAutoCall,
+        }}
       >
         <TablaDj ordenes={ordenes} editor={editor} cargando={cargando} />
       </Seccion>
 
       <Seccion
         titulo={`C · ${SECCION_C}`}
+        tono="c"
         pregunta="¿que OCs llevan mucho esperando la OC Final del OTIC?"
         enSeccion={enC}
         total={ordenes.length}
@@ -320,8 +332,31 @@ export function TableroMock({
       <ConfigDeLlamadas
         data={data}
         onAbrirModal={() => setModalAbierto(true)}
-        onRestaurar={onRestaurarReglas}
+        onRestaurar={() =>
+          data && onGuardarReglas({ ...data.callRulesDefault, dj: data.callRules.dj })
+        }
       />
+
+      {data ? (
+        <ConfigDeLlamadasDj
+          rules={data.callRules}
+          defaults={data.callRulesDefault}
+          onEditar={() => setModalDjAbierto(true)}
+          onRestaurar={() =>
+            onGuardarReglas({ ...data.callRules, dj: structuredClone(data.callRulesDefault.dj) })
+          }
+        />
+      ) : null}
+      {modalDjAbierto && data ? (
+        <ModalReglasDj
+          rules={data.callRules}
+          onCerrar={() => setModalDjAbierto(false)}
+          onGuardar={(r) => {
+            onGuardarReglas(r);
+            setModalDjAbierto(false);
+          }}
+        />
+      ) : null}
 
       {modalAbierto && data ? (
         <ModalReglas
@@ -342,38 +377,104 @@ export function TableroMock({
  * Una seccion del Semaforo, colapsada en una vineta como en el original. `<details>` nativo:
  * el estado de abierto/cerrado es del navegador, no hay que sincronizarlo con nada.
  */
+interface AutoCallDeLaSeccion {
+  seccion: SeccionDeVoz;
+  activo: boolean;
+  /** OCs de ESTA seccion que ya cumplen su regla. Lo necesita el aviso de la vineta. */
+  enCondicion: number;
+  deshabilitado: boolean;
+  onToggle: (seccion: SeccionDeVoz, enabled: boolean) => void;
+}
+
 function Seccion({
   titulo,
+  tono,
   pregunta,
   enSeccion,
   total,
   llama,
   abiertaPorDefecto,
+  autoCall,
   children,
 }: {
   titulo: string;
+  /**
+   * Color de borde de esta seccion. Es SOLO presentacion — sirve para distinguir los tres
+   * tableros de un vistazo y no significa criticidad ni "puede llamar". Los valores viven en
+   * `styles.css` (`.uv-seccion--a/b/c`), no aca: el componente no decide colores.
+   */
+  tono: 'a' | 'b' | 'c';
   pregunta: string;
   enSeccion: number;
   total: number;
   llama: boolean;
   abiertaPorDefecto: boolean;
+  /** Solo las secciones que pueden llamar traen interruptor. La C no lo tiene. */
+  autoCall?: AutoCallDeLaSeccion;
   children: React.ReactNode;
 }) {
   return (
     // `aria-label` en el `<details>`: es lo que nombra la seccion entera para un lector de
     // pantalla (y lo que permite apuntarle desde un test sin depender del texto del resumen).
-    <details className="uv-seccion" aria-label={`Seccion ${titulo}`} open={abiertaPorDefecto}>
+    <details
+      className={`uv-seccion uv-seccion--${tono}`}
+      aria-label={`Seccion ${titulo}`}
+      open={abiertaPorDefecto}
+    >
       <summary className="uv-seccion__titulo">
-        {titulo}
+        <span>{titulo}</span>
         <span className="uv-note">
-          {' '}
           — {enSeccion} de {total} OCs en la seccion ·{' '}
-          {llama ? 'unica seccion que puede llamar' : 'no origina llamadas'}
+          {llama ? 'puede originar llamadas' : 'no origina llamadas'}
         </span>
+        {autoCall ? <InterruptorDeLlamadas titulo={titulo} {...autoCall} /> : null}
       </summary>
       <p className="uv-note">{pregunta}</p>
+      {autoCall?.activo ? (
+        <div className="uv-banner uv-banner--ok" role="status">
+          Llamadas automaticas <strong>ENCENDIDAS</strong> para esta seccion:{' '}
+          <strong>esperando una transicion de NO a SI al guardar</strong>. Encender el interruptor
+          no llama a las {autoCall.enCondicion} OCs que ya cumplen la regla ni las deja en una cola.
+          Para probar una, guarda primero una edicion que la deje en «¿Llama? = NO» y despues otra
+          que la devuelva a «SI». Solo ese ultimo guardado intenta llamar.
+        </div>
+      ) : null}
       {children}
     </details>
+  );
+}
+
+/**
+ * El interruptor de llamadas automaticas de UNA seccion, dentro de su propia vineta.
+ *
+ * Vive en el `<summary>` a proposito: es la unica forma de que se lea como "de este tablero" y
+ * no como un ajuste global. El `stopPropagation` es obligatorio — sin el, cada click en el
+ * interruptor ademas abre o cierra la seccion, porque el `<summary>` es el que la gobierna.
+ */
+function InterruptorDeLlamadas({
+  titulo,
+  seccion,
+  activo,
+  deshabilitado,
+  onToggle,
+}: AutoCallDeLaSeccion & { titulo: string }) {
+  return (
+    <label
+      className={`uv-switch${activo ? ' uv-switch--on' : ''}`}
+      onClick={(ev) => ev.stopPropagation()}
+    >
+      <input
+        type="checkbox"
+        checked={activo}
+        disabled={deshabilitado}
+        aria-label={`Llamadas automaticas de ${titulo}`}
+        onChange={(ev) => onToggle(seccion, ev.target.checked)}
+      />
+      <span className="uv-switch__track" aria-hidden="true" />
+      <span className="uv-switch__texto">
+        Llamadas automaticas {activo ? 'ENCENDIDAS' : 'apagadas'}
+      </span>
+    </label>
   );
 }
 
@@ -448,7 +549,7 @@ function CeldaNivel({
 }
 
 // ---------------------------------------------------------------------------
-// A · Riesgo Conexion — la unica seccion que puede terminar en una llamada
+// A · Riesgo Conexion — reglas configurables de llamada
 // ---------------------------------------------------------------------------
 
 function TablaConexion({
@@ -630,7 +731,7 @@ function TablaConexion({
                   />
                 </td>
                 <td>
-                  {e.regla.dispara ? (
+                  {e.enSeccionA && e.regla.dispara ? (
                     <span className="uv-badge uv-badge--critico">SI</span>
                   ) : (
                     <span className="uv-note">no</span>
@@ -662,7 +763,7 @@ function TablaConexion({
 }
 
 // ---------------------------------------------------------------------------
-// B · Riesgo DJ — se ve y se edita, nunca llama
+// B · Riesgo DJ — seguimiento con el mismo flujo de llamada
 // ---------------------------------------------------------------------------
 
 function TablaDj({
@@ -679,11 +780,12 @@ function TablaDj({
   return (
     <>
       <p className="uv-note">
-        Esta seccion <strong>no origina llamadas</strong> y no tiene columna «¿Llama?»: una DJ
-        pendiente se resuelve con el OTIC, no con el alumno por telefono. Se edita para poder ver
-        como cambia su semaforo. Campos que mandan aca: <strong>termino</strong> del curso (de ahi
-        salen los dias desde el cierre), <strong>conectados</strong> y <strong>con DJ</strong> — el
-        porcentaje se calcula sobre los conectados, no sobre los inscritos.
+        Esta seccion puede llamar al contacto responsable por declaraciones pendientes cuando el
+        cumple los umbrales de llamada DJ configurados. Usa el mismo interruptor, telefono por OC y
+        controles de A. Si la gestion depende del OTIC, el agente deja el caso para revision humana.
+        Campos que mandan aca: <strong>termino</strong> del curso (de ahi salen los dias desde el
+        cierre), <strong>conectados</strong> y <strong>con DJ</strong> — el porcentaje se calcula
+        sobre los conectados, no sobre los inscritos.
       </p>
       <div className="uv-table-wrap">
         <table className="uv-table">
@@ -698,6 +800,7 @@ function TablaDj({
               <th className="uv-num">% DJ</th>
               <th className="uv-num">Dias desde el cierre</th>
               <th>Nivel</th>
+              <th>¿Llama?</th>
               <th></th>
             </tr>
           </thead>
@@ -756,7 +859,11 @@ function TablaDj({
                       motivo={e.dj.motivoFuera}
                     />
                   </td>
+                  <td>{e.dj.enSeccion && e.regla.dispara ? 'SI' : 'no'}</td>
                   <td>
+                    <span className="uv-note">
+                      {e.variablesAgente.nombre_interlocutor} · {e.order.phone}
+                    </span>
                     <BotonGuardar e={e} editor={editor} seccion={SECCION_B} />
                   </td>
                 </tr>
@@ -764,7 +871,7 @@ function TablaDj({
             })}
             {filas.length === 0 ? (
               <tr>
-                <td colSpan={10} className="uv-note">
+                <td colSpan={11} className="uv-note">
                   {cargando ? 'Cargando…' : 'Sin datos del Mock.'}
                 </td>
               </tr>
@@ -919,8 +1026,9 @@ function ConfigDeLlamadas({
       <p className="uv-note">
         Estos umbrales deciden <strong>cuando el agente llama</strong>, y solo aplican a la seccion
         A · Riesgo Conexion. No cambian la criticidad que muestra el Semaforo —esa se calcula
-        siempre con los umbrales reales del original y no es configurable— ni tocan las secciones B
-        y C, que no llaman. Cambiarlos aca no llama por si solo: re-alinea el estado de cada OC.
+        siempre con los umbrales reales del original y no es configurable—. Los umbrales de B se
+        editan en su apartado. C no origina llamadas. Cambiarlos aca no llama por si solo: re-alinea
+        el estado de cada OC.
       </p>
 
       <table className="uv-table uv-table--compact">
@@ -1053,6 +1161,140 @@ function ModalReglas({
         <div className="uv-controls">
           <button className="uv-button" onClick={() => onGuardar(draft)}>
             Guardar umbrales
+          </button>
+          <button className="uv-button" onClick={onCerrar}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfigDeLlamadasDj({
+  rules,
+  defaults,
+  onEditar,
+  onRestaurar,
+}: {
+  rules: CallRules;
+  defaults: CallRules;
+  onEditar: () => void;
+  onRestaurar: () => void;
+}) {
+  const modificado = JSON.stringify(rules.dj) !== JSON.stringify(defaults.dj);
+  return (
+    <section className="uv-subpanel" aria-label="Configuracion de llamadas B · Riesgo DJ">
+      <div className="uv-panel__header">
+        <h3 className="uv-panel__title">B · Umbrales de llamada por declaraciones juradas</h3>
+        <div className="uv-controls">
+          <button className="uv-button uv-button--sm" onClick={onEditar}>
+            Editar umbrales DJ
+          </button>
+          <button className="uv-button uv-button--sm" disabled={!modificado} onClick={onRestaurar}>
+            Restaurar umbrales DJ
+          </button>
+        </div>
+      </div>
+      <p className="uv-note">
+        Estas reglas deciden cuándo llamar por DJ. No cambian el nivel del semáforo. Se mantienen
+        los requisitos de B: curso terminado, participantes conectados, DJ incompletas y más de tres
+        días desde el cierre. Cambiar o restaurar umbrales no llama por sí solo; debe ocurrir una
+        nueva transición al guardar una OC y el interruptor de B debe estar encendido.
+      </p>
+      <table className="uv-table uv-table--compact">
+        <thead>
+          <tr>
+            <th>Regla de llamada</th>
+            <th>Valor activo</th>
+            <th>Valor predeterminado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Días desde cierre mayores que</td>
+            <td>{rules.dj.llamarSiDiasMayorA ?? 'nunca'}</td>
+            <td>{defaults.dj.llamarSiDiasMayorA ?? 'nunca'}</td>
+          </tr>
+          <tr>
+            <td>Niveles que llaman</td>
+            <td>{rules.dj.nivelesQueLlaman.join(', ')}</td>
+            <td>{defaults.dj.nivelesQueLlaman.join(', ')}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function ModalReglasDj({
+  rules,
+  onCerrar,
+  onGuardar,
+}: {
+  rules: CallRules;
+  onCerrar: () => void;
+  onGuardar: (r: CallRules) => void;
+}) {
+  const [dj, setDj] = useState(() => structuredClone(rules.dj));
+  return (
+    <div
+      className="uv-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Editar umbrales de llamada DJ"
+    >
+      <div className="uv-modal">
+        <h3 className="uv-panel__title">Umbrales de llamada B · Riesgo DJ</h3>
+        <p className="uv-note">
+          Vacío desactiva las llamadas por DJ. El corte es estricto: se llama cuando los días
+          superan el valor indicado y el nivel está habilitado. Los días se calculan igual que en el
+          semáforo.
+        </p>
+        <label className="uv-field">
+          <span className="uv-field__label">Llamar si días desde el cierre &gt;</span>
+          <input
+            className="uv-input"
+            type="number"
+            min={0}
+            step={1}
+            placeholder="nunca"
+            value={dj.llamarSiDiasMayorA ?? ''}
+            onChange={(e) =>
+              setDj({
+                ...dj,
+                llamarSiDiasMayorA: e.target.value === '' ? null : Number(e.target.value),
+              })
+            }
+          />
+        </label>
+        <fieldset className="uv-field">
+          <legend className="uv-field__label">Niveles DJ que habilitan la llamada</legend>
+          {(['CRITICO', 'ALERTA', 'NORMAL'] as Nivel[]).map((n) => (
+            <label className="uv-field uv-field--inline" key={n}>
+              <input
+                type="checkbox"
+                checked={dj.nivelesQueLlaman.includes(n)}
+                onChange={(e) =>
+                  setDj({
+                    ...dj,
+                    nivelesQueLlaman: e.target.checked
+                      ? [...new Set([...dj.nivelesQueLlaman, n])]
+                      : dj.nivelesQueLlaman.filter((v) => v !== n),
+                  })
+                }
+              />
+              <span>{n}</span>
+            </label>
+          ))}
+        </fieldset>
+        <p className="uv-note">
+          Seleccionar NORMAL no elimina los tres días de gracia ni los otros requisitos de entrada
+          de B.
+        </p>
+        <div className="uv-controls">
+          <button className="uv-button" onClick={() => onGuardar({ ...rules, dj })}>
+            Guardar umbrales DJ
           </button>
           <button className="uv-button" onClick={onCerrar}>
             Cancelar

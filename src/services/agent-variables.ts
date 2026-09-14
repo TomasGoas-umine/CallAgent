@@ -23,6 +23,7 @@ export function buildCourseAgentVariables(
     contactoNombre: evaluation.contactoNombre,
     diasRestantes: evaluation.diasRestantes,
     pctConexion: evaluation.group.pctConexion,
+    djPendientes: evaluation.dj?.pendientes,
   });
 }
 
@@ -35,6 +36,7 @@ export interface AgentVariablesInput {
   contactoNombre?: string | null;
   diasRestantes?: number;
   pctConexion?: number;
+  djPendientes?: number;
 }
 
 /**
@@ -44,7 +46,7 @@ export interface AgentVariablesInput {
  * `{{placeholder}}` en voz alta.
  *
  * Agente actual ("Sence", es): nombre_interlocutor, nombre_cliente, nombre_curso,
- * dias_restantes, pct_conexion, orden_compra y motivo. La configuración versionable vive en
+ * dias_restantes, pct_conexion, dj_pendientes, orden_compra y motivo. La configuración versionable vive en
  * scripts/lib/sence-agent-config.ts; el test de contrato verifica que ambas partes coincidan.
  *
  * Si cambias el prompt del agente y agregas una variable, hay que agregarla ACA tambien.
@@ -63,6 +65,10 @@ export function buildAgentDynamicVariables(input: AgentVariablesInput): Record<s
       input.pctConexion >= 0 &&
       input.pctConexion <= 100
         ? `${input.pctConexion === 100 ? 100 : Math.min(99.999999, Number(input.pctConexion.toFixed(6)))}%`
+        : '',
+    dj_pendientes:
+      Number.isInteger(input.djPendientes) && input.djPendientes! >= 0
+        ? String(input.djPendientes)
         : '',
     orden_compra: input.orderNumber.trim(),
     motivo: input.motivo.trim(),

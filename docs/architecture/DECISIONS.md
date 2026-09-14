@@ -281,6 +281,8 @@ rechaza tambien consume cuota). Si negocio necesita un tope en minutos, es un ti
 
 ## ADR-011 — Las secciones B y C del Semaforo se muestran y se editan, pero nunca llaman
 
+**Reemplazada parcialmente por ADR-012 el 2026-09-11: B ahora admite llamadas. C sigue informativa.**
+
 **Fecha:** 2026-09-11 · **Estado:** aceptada
 
 **Contexto.** El Semaforo real tiene tres secciones, cada una con su propia pregunta, su propio
@@ -337,3 +339,56 @@ validacion propia: `djs <= conexiones`, porque la seccion B divide DJ sobre CONE
 inscritos. Y queda una regla viva para quien toque esto despues: **si alguna vez una seccion nueva
 tiene que poder llamar, la decision se toma aca y en `call-rules.ts`, nunca agregandole una
 condicion al trigger del Mock.**
+
+## ADR-012 — Un agente, dos motivos: conexión y declaraciones juradas
+
+**Fecha:** 2026-09-11. **Estado:** aceptada por solicitud explícita del usuario.
+
+**Problema:** el tablero mostraba B, pero la selección, revalidación y workflow solo admitían A.
+El agente remoto coincidía con esa configuración: un motivo distinto terminaba en revisión humana.
+
+**Decisión:** ampliar el agente existente con una etapa `contexto_dj`, reutilizando identificación,
+diagnóstico, soporte, acuerdo y salidas. Crear otro agente duplicaría identidad, voz, controles,
+análisis y mantenimiento sin aportar un flujo distinto. El prompt general crece de 5.107 a 5.211
+caracteres; las instrucciones específicas de DJ se cargan en su etapa, no en todas las etapas.
+
+El backend selecciona `riesgo_dj_critico` solo con el gate B y nivel CRITICO, calculados por los
+mismos módulos del semáforo: curso terminado, conectados > 0, DJ/conectados < 1 y más de siete días desde el cierre.
+Se conserva el `Math.ceil` del original; no se reemplaza por días transcurridos completos.
+Los umbrales configurables de A no modifican B. C no origina llamadas.
+
+`readCallSemaforo` compone A y B para selección, API y revalidación; `readSemaforo` conserva la
+vista A. El seguimiento guarda motivo y sección, y el dispatcher revalida la sección original:
+una llamada de A nunca se convierte silenciosamente en B al terminar un curso. DJ completada,
+sin conectados o fuera del umbral cancela antes de consumir cuota. El Mock usa el mismo flujo
+manual, teléfono por OC, toggle, flanco por motivo, cooldown por OC e idempotencia. La confirmación
+manual muestra y envía la sección elegida para evitar cambiar el motivo desde un preview antiguo.
+
+La nueva variable `dj_pendientes` procede de conectados menos DJ y se relee antes de marcar.
+El 100% de conexión es válido para B; no demuestra que las declaraciones estén completas.
+La clave histórica `motivo_no_conexion` se conserva para compatibilidad con webhook e historial,
+y extrae la causa de cualquiera de los dos motivos. Los cinco campos y el criterio único de
+resolución siguen iguales, sin una migración de datos.
+
+**Alcance conversacional:** contactar al responsable de capacitación para conocer el estado y
+recoger acción/plazo para las declaraciones. No atribuir faltas a un alumno concreto, firmar por
+terceros, inventar instrucciones de plataforma o plazos legales. Dependencia del OTIC, validación
+administrativa o bloqueo persistente requieren revisión humana. No se verifica acreditación.
+
+**Validación:** pruebas de selección, umbrales B, conexión completa, preview, revalidación,
+consentimiento, cuotas, repetición e interfaz; pruebas de transición y simulación de texto en
+ElevenLabs. No se activan cron ni llamadas telefónicas de prueba automáticamente.
+
+## ADR-013 — Umbrales de llamada DJ independientes de la criticidad
+
+**Fecha:** 2026-09-11. **Estado:** aceptada por solicitud explícita del usuario.
+
+Se contrastaron B/C con `../semaforo-reglas-negocio`. Los cálculos ya coincidían; se amplió
+el editor para representar los estados manuales documentados, incluida EN RECTIFICACION.
+B admite días y niveles configurables para llamar, manteniendo intactos el gate y los umbrales
+del semáforo. Sustituye la restricción de ADR-012 que limitaba siempre las llamadas B a CRITICO.
+Default: más de siete días y CRITICO. Vacío desactiva B; C sigue sin llamadas.
+
+La regla se comparte entre preview, evaluación, disparo y revalidación. Cada panel restaura
+solo su criterio; editar reglas no origina llamadas ni deja una transición pendiente.
+Detalle y fuentes: [Auditoría B/C](../status/AUDITORIA-SEMAFORO-B-C-2026-09-11.md).

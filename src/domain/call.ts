@@ -9,6 +9,12 @@ export type CallOutcome =
   | 'busy'
   | 'voicemail'
   | 'invalid_number'
+  /**
+   * La llamada nunca se establecio por un fallo del proveedor: numero invalido, rechazo del
+   * carrier, permisos geograficos de Twilio, o cancelada antes de que atendieran. Lo reporta
+   * Twilio (`status` = failed/canceled), nunca ElevenLabs: su `data.status` no lo distingue.
+   */
+  | 'call_failed'
   | 'resolved'
   | 'follow_up_required'
   | 'human_escalation'

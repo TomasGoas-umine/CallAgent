@@ -9,8 +9,11 @@
  *      URL publica viva, webhook registrado y secreto correcto.
  *   2. `services/conversation-sync` — el proyecto lo va a buscar a la API (pull). Solo requiere
  *      la API key.
+ *   3. `services/dialing-reconciler` — cuando NO hubo conversacion en ElevenLabs (nadie atendio,
+ *      el carrier rechazo), el unico que sabe algo es Twilio. Llega aca con un payload sintetico
+ *      y el snapshot de Twilio en `input.twilio`.
  *
- * Los dos terminan aca con el MISMO payload en la forma `post_call_transcription`. Este modulo
+ * Los tres terminan aca con el MISMO payload en la forma `post_call_transcription`. Este modulo
  * no sabe de HTTP, de firmas ni de quien lo llamo.
  *
  * Idempotente por `conversation_id`: la escritura del CALL es condicional, y si ya existia no
@@ -25,6 +28,7 @@ import { env } from '../utils/env.js';
 import { logger } from '../utils/logger.js';
 import { retryBackoffMs } from '../utils/scheduling.js';
 import type { ElevenLabsPostCallPayload } from '../domain/call.js';
+import type { TwilioCallSnapshot } from './twilio-calls-client.js';
 
 export interface CallResultRecorderDeps {
   followupRepository?: FollowupRepository;
@@ -37,7 +41,14 @@ export interface RecordCallResultInput {
   followupId: string;
   payload: ElevenLabsPostCallPayload;
   /** Como llegamos a este resultado. Queda persistido en el CALL y en los logs. */
-  fuente: 'webhook' | 'sync';
+  fuente: 'webhook' | 'sync' | 'twilio';
+  /**
+   * Estado final que reporto Twilio para esta misma llamada, si se pudo consultar. Manda sobre
+   * la heuristica de la conversacion cuando dice que la llamada nunca se establecio: ElevenLabs
+   * no distingue una no contestada de una conversacion vacia (UV-053) y la cerraba como
+   * `contacted` -> CERRADO. Opcional: sin el, la clasificacion es la de siempre.
+   */
+  twilio?: TwilioCallSnapshot | null;
 }
 
 export interface RecordCallResultOutput {
@@ -48,7 +59,13 @@ export interface RecordCallResultOutput {
   isNotAnswered?: boolean;
 }
 
-const NOT_ANSWERED_OUTCOMES = new Set(['no_answer', 'busy', 'voicemail', 'invalid_number']);
+const NOT_ANSWERED_OUTCOMES = new Set([
+  'no_answer',
+  'busy',
+  'voicemail',
+  'invalid_number',
+  'call_failed',
+]);
 
 /**
  * Estados en los que ElevenLabs todavia no termino de procesar la conversacion. Guardarlos
@@ -94,14 +111,15 @@ export async function recordCallResult(
 ): Promise<RecordCallResultOutput> {
   const followupRepository = deps.followupRepository ?? new FollowupRepository();
   const contactRepository = deps.contactRepository ?? new ContactRepository();
-  const { followupId, payload, fuente } = input;
+  const { followupId, payload, fuente, twilio } = input;
   const conversationId = payload.data.conversation_id;
 
-  const classification = classifyCallOutcome(payload);
+  const classification = classifyCallOutcome(payload, twilio);
   const metadata = payload.data.metadata;
   // El SID de Twilio viene en `metadata.phone_call.call_sid` en los payloads reales; los
-  // fixtures/el mock lo ponen plano en `metadata.call_sid`. Se aceptan ambos.
-  const callSid = metadata?.call_sid ?? metadata?.phone_call?.call_sid ?? null;
+  // fixtures/el mock lo ponen plano en `metadata.call_sid`. Se aceptan ambos. Y si el resultado
+  // vino del reconciliador (llamada sin conversacion), el SID lo trae el propio snapshot.
+  const callSid = metadata?.call_sid ?? metadata?.phone_call?.call_sid ?? twilio?.sid ?? null;
   const startedAt = metadata?.start_time_unix_secs
     ? new Date(metadata.start_time_unix_secs * 1000).toISOString()
     : null;
@@ -119,6 +137,16 @@ export async function recordCallResult(
     evaluation: payload.data.analysis?.evaluation_criteria_results ?? {},
     cost: metadata?.cost ?? null,
     terminationReason: metadata?.termination_reason ?? null,
+    twilio: twilio
+      ? {
+          status: twilio.status,
+          answeredBy: twilio.answeredBy,
+          durationSeconds: twilio.durationSeconds,
+          startedAt: twilio.startedAt,
+          endedAt: twilio.endedAt,
+          price: twilio.price,
+        }
+      : null,
     transcriptS3Key: null,
     // Se persiste para que el operador pueda leerla en el micrositio. Nunca se loguea:
     // logger.ts omite `transcript`/`transcript_summary` a proposito.
@@ -171,7 +199,11 @@ export async function recordCallResult(
     case 'no_answer':
     case 'busy':
     case 'voicemail':
-    case 'invalid_number': {
+    case 'invalid_number':
+    // La llamada no llego a establecerse (lo dice Twilio): mismo tratamiento que una no
+    // contestada — cuenta un intento y vuelve a quedar disponible, nunca se cierra como
+    // contactado. Nada la va a reintentar sola: el disparo sigue siendo manual (regla 0).
+    case 'call_failed': {
       const intentos = followup.intentos + 1;
       if (intentos >= env.maxAttempts) {
         await followupRepository.setEstado(followupId, 'AGOTADO', { intentos });
@@ -204,6 +236,7 @@ export async function recordCallResult(
     conversationId,
     outcome: classification.outcome,
     fuente,
+    twilioStatus: twilio?.status,
   });
 
   return {

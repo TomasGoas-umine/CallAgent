@@ -42,6 +42,38 @@ beforeEach(() => {
 });
 
 describe('Disparador — confirmacion obligatoria', () => {
+  it('confirma el motivo DJ y envía la sección B sin confundirla con conexión', async () => {
+    const fetchSpy = spyFetch();
+    const user = userEvent.setup();
+    const curso = {
+      ...CURSO_CRITICO,
+      seccion: 'B_RIESGO_DJ' as const,
+      dj: { pendientes: 6, diasDesdeCierre: 10 },
+      pctConexion: 100,
+      diasRestantes: -10,
+      variablesAgente: {
+        ...CURSO_CRITICO.variablesAgente,
+        motivo: 'riesgo_dj_critico',
+        dj_pendientes: '6',
+      },
+    };
+    render(<Disparador health={HEALTH_OK} cursos={[curso]} onDisparado={() => {}} />);
+    await user.selectOptions(
+      screen.getByLabelText(/curso/i),
+      `${curso.clientId}#${curso.orderNumber}`,
+    );
+    await user.selectOptions(screen.getByLabelText(/numero a llamar/i), '+56900100141');
+    await user.click(screen.getByRole('button', { name: /disparar llamada/i }));
+    const modal = screen.getByRole('dialog');
+    expect(modal.textContent).toContain(
+      'declaraciones juradas: 6 pendientes, 10 dias desde el cierre',
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await user.click(within(modal).getByRole('button', { name: /confirmar/i }));
+    const [, request] = fetchSpy.mock.calls[0]! as unknown as [string, RequestInit];
+    expect(JSON.parse(request.body as string)).toMatchObject({ seccion: 'B_RIESGO_DJ' });
+  });
+
   it('elegir curso y numero NO dispara nada: solo abre el modal', async () => {
     const fetchSpy = spyFetch();
     const user = userEvent.setup();

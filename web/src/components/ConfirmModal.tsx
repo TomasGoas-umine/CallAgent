@@ -70,10 +70,9 @@ export function ConfirmModal({
           <span className="uv-mono">{curso.orderNumber}</span>
           <span className="uv-kv__k">Urgencia</span>
           <span>
-            {curso.nivel} — semana {curso.semana}, {curso.pctConexion}% de conexion,{' '}
-            {curso.diasRestantes === undefined
-              ? 'Sin fecha de termino'
-              : `${curso.diasRestantes} dias restantes`}
+            {curso.dj
+              ? `${curso.nivel} — declaraciones juradas: ${curso.dj.pendientes} pendientes, ${curso.dj.diasDesdeCierre} dias desde el cierre`
+              : `${curso.nivel} — semana ${curso.semana}, ${curso.pctConexion}% de conexion, ${curso.diasRestantes ?? 'sin dato de'} dias restantes`}
           </span>
         </div>
 

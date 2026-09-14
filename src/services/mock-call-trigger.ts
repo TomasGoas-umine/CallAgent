@@ -71,17 +71,24 @@ export async function maybeTriggerMockCall(
   const evaluacion = evaluateMockOrder(order, getCallRules());
   const dispara = evaluacion.regla.dispara;
   const trigger = getTriggerState(clientId, orderNumber);
-  const disparabaAntes = trigger.disparabaAntes;
+  const motivo = evaluacion.variablesAgente.motivo!;
+  // El interruptor es POR SECCION: una OC en riesgo de DJ mira el de B, no el de A. La seccion
+  // la decide `evaluateMockOrder`, que es la misma que viaja despues a `originateManualCall`.
+  const seccion = evaluacion.seccion;
+  const disparabaAntes =
+    trigger.disparabaAntes && (!trigger.motivoAnterior || trigger.motivoAnterior === motivo);
 
   // El latch se actualiza SIEMPRE, incluso si no se llama: si la OC deja de cumplir la regla,
   // vuelve a quedar armada para el proximo flanco.
-  recordTriggerEvaluation(clientId, orderNumber, dispara);
+  recordTriggerEvaluation(clientId, orderNumber, dispara, motivo);
 
-  if (!isAutoCallEnabled()) {
+  if (!isAutoCallEnabled(seccion)) {
     return {
       disparo: false,
       motivo: 'auto_call_desactivado',
-      detalle: 'Las llamadas automaticas del Mock estan apagadas.',
+      // Nombrar la seccion importa: con dos interruptores, "estan apagadas" a secas hacia
+      // pensar que el problema era el otro, el que si estaba encendido.
+      detalle: `Las llamadas automaticas de la seccion ${seccion} estan apagadas.`,
     };
   }
   if (!dispara) {
@@ -120,7 +127,9 @@ export async function maybeTriggerMockCall(
     orderNumber,
     pctConexion: evaluacion.pctConexion,
     semana: evaluacion.semana,
-    nivel: evaluacion.nivel,
+    motivo,
+    seccion,
+    nivel: evaluacion.dj.enSeccion ? evaluacion.dj.nivel : evaluacion.nivel,
     umbral: evaluacion.regla.umbral,
     idempotencyKey,
   });
@@ -134,6 +143,7 @@ export async function maybeTriggerMockCall(
       phone: evaluacion.order.phone,
       idempotencyKey,
       requestedBy: 'tablero-mock',
+      seccion,
     },
     { ...deps, tableroClient: new MockTableroApiClient() },
   );

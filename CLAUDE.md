@@ -46,8 +46,10 @@ npm run webhook:selftest -- --conversation-id=conv_x   # reproduce una llamada r
 npm run providers:check      # §5 valida el registro del webhook contra la API de ElevenLabs
 
 # Registro de llamadas por API (camino pull — no depende del webhook)
-npm run calls:sync           # trae los resultados desde la API de ElevenLabs (solo GET)
+npm run calls:sync           # ElevenLabs + estado final en Twilio (solo GET)
 npm run calls:sync -- --since=2026-09-01
+npm run calls:sync -- --no-twilio    # solo conversaciones, sin consultar el estado final
+npm run calls:sync -- --gracia=30    # minutos antes de considerar colgado un DIALING
 npm run calls:sync -- --conversation-id=conv_x --followup-id=<uuid>   # atribucion manual
 
 # Fixture del Semaforo (NO editar el JSON a mano)
@@ -154,7 +156,7 @@ npm run web:dev              # micrositio en :5173 (en otra terminal)
   (`services/guardrails.ts`), asi que un numero fuera de `ALLOWLIST_NUMBERS` responde 403 igual.
   Lo que hace el front es avisar el motivo antes. **No muevas el chequeo de allowlist al front.**
 
-**Hay DOS caminos para que el resultado de una llamada entre al proyecto, y comparten la misma
+**Hay TRES caminos para que el resultado de una llamada entre al proyecto, y comparten la misma
 logica.** El que decide que pasa con un resultado es `services/call-result-recorder.ts`, uno
 solo: clasifica, persiste el CALL e imprime la transicion de estado. Si agregas una regla, va
 ahi — nunca en un handler ni en el sync.
@@ -164,6 +166,13 @@ ahi — nunca en un handler ni en el sync.
    idempotente, recupera hacia atras y lo dispara una persona: `npm run calls:sync`, o el boton
    **Sincronizar** del Dashboard (`POST /api/calls/sync`). Solo hace `GET` contra el proveedor:
    **no origina llamadas**, asi que no viola la regla 0 ni necesita el modal de confirmacion.
+   1-bis. **TWILIO, dentro del mismo `calls:sync`** (`services/twilio-calls-client.ts` +
+   `services/dialing-reconciler.ts`). Dos usos, los dos solo `GET`: (a) cruzar cada conversacion
+   con su llamada para saber si el telefono llego a ser atendido, y (b) una **segunda pasada**
+   sobre los FOLLOWUP en DIALING, que es el unico camino por el que se resuelven las llamadas
+   que **no dejan conversacion** — esas no aparecen en la pasada 1 por definicion. Necesita
+   `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` **de la misma cuenta que ElevenLabs usa para
+   llamar**; sin ellas el sync corre igual y lo dice en el reporte.
 2. **PUSH (`handlers/webhooks/elevenlabs-post-call`) — el preferido en produccion.** ElevenLabs
    entrega el resultado apenas termina la llamada. Depende de tres cosas encadenadas: URL
    publica viva, webhook registrado apuntando a **esa** url, y el secreto correcto. En local, un
@@ -201,9 +210,19 @@ aceptan ambos); el inicio en `metadata.start_time_unix_secs`; y `endedAt` se cal
 inicio + duracion, NO desde `event_timestamp` — en un sync ese timestamp es "ahora" y fecharia
 una llamada vieja como recien terminada. Y **el `data.status` real nunca es `no-answer`/`busy`**
 — solo `initiated`/`in-progress`/`processing`/`done`/`failed` — asi que
-`NOT_ANSWERED_STATUS_MAP` no se activa con payloads reales y una llamada no contestada cae como
-`contacted`/`unknown` -> `CERRADO`. Hueco conocido y abierto (UV-053): ahora se persiste
-`terminationReason` para poder calibrarlo con evidencia, no inventando la heuristica.
+`NOT_ANSWERED_STATUS_MAP` no se activa con payloads reales.
+
+**Por eso la clasificacion le pregunta a Twilio, que es quien marco el numero** (UV-053): si su
+`status` es `no-answer`/`busy`/`failed`/`canceled` ese resultado **manda** sobre lo que diga la
+conversacion (`classifyTwilioCall`, en el mismo `call-outcome-classifier.ts` — no lo dupliques).
+Si dice `completed`, decide la conversacion como siempre: Twilio no sabe de que se hablo. Reglas
+que no se negocian: **no se adivina** (sin `call_sid` guardado el seguimiento se deja como esta y
+se reporta por que), y un `completed` **sin** conversacion todavia disponible deja el FOLLOWUP en
+DIALING — cerrarlo ahi tiraria la transcripcion que ElevenLabs esta procesando. El `call_sid` lo
+persiste el dispatcher (`registrarIntentoSaliente`): sin el no hay por donde empezar, porque el
+item `CONVERSATION#<id>` solo existe si hubo conversacion. El CALL sintetico se guarda como
+`CALL#twilio:<CallSid>`, asi que reconciliar dos veces es idempotente por `call_sid` y no pisa la
+conversacion real si aparece despues.
 
 **La cuota diaria es persistente** (`QuotaRepository`, `QUOTA#<fecha> COUNTER` con `ADD`
 condicional atomico) y la consume el dispatcher justo despues de la escritura condicional
@@ -216,7 +235,8 @@ no minutos (ver UV-044).
    agregues cron, scheduler, polling, worker de cola ni reintentos automaticos.
    **Solo dos caminos pueden originar una llamada**, los dos disparados por una accion humana:
    el **Disparador** (`POST /api/calls`) y el **Tablero Mock** (`PATCH` de una OC que produce
-   una transicion hacia la condicion configurada, y solo con el toggle encendido). Los dos
+   una transicion hacia la condicion configurada, y solo con el interruptor de SU seccion
+   encendido — hay uno por seccion de voz, ver abajo). Los dos
    terminan en `originateManualCall` -> `dispatchFollowup`. El **Tablero Original nunca llama**:
    es de solo lectura y su cliente HTTP no entra en ningun camino de originacion. El `candidate-evaluator` existe y se puede correr a
    mano, pero **su disparador no se habilita**. Ver `docs/architecture/DECISIONS.md` ADR-010.
@@ -247,12 +267,11 @@ no minutos (ver UV-044).
    aca. **Las tres escalas son independientes**: un CRITICO de conexion no equivale a uno de DJ,
    y mezclarlas da otro resultado (hay un test que lo fija). Contrato del API, paginacion y
    limitaciones: **`docs/SEMAFORO_INTEGRACION.md`**.
-   2-bis. **Solo la seccion A (Riesgo Conexion) puede terminar en una llamada** (ADR-011). B
-   (Riesgo DJ) y C (Rectificacion) se muestran y —en el Tablero Mock— se editan, pero
-   `call-rules.ts` no las conoce y `mock-tablero-store` arma `regla` unicamente desde la seccion
-   A. Una DJ que falta o una OC Final que no llega se resuelven con el OTIC, no con el alumno:
-   llamar no las mueve. Si alguna vez hay que cambiar eso, se decide en ADR-011 y en
-   `call-rules.ts`, **nunca** agregandole una condicion a `mock-call-trigger.ts`.
+   2-bis. **A y B pueden originar llamadas; C no** (ADR-012, reemplaza parcialmente ADR-011).
+   A sigue conexión; B sigue declaraciones juradas con el contacto responsable. `call-rules.ts`
+   define la decisión y `course-lookup` compone los gates/clasificadores. No agregar reglas al
+   trigger ni al frontend. A y B tienen umbrales de llamada independientes; ambos usan CRITICO por defecto.
+
 3. **`.env.example` solo lleva nombres de variables**, nunca valores reales. Revisa `git diff`
    antes de cada commit.
 4. **Todo lo que pueda reintentarse debe ser idempotente**: creacion de FOLLOWUP (escritura
@@ -301,7 +320,7 @@ no minutos (ver UV-044).
 - **En el Tablero Mock el telefono se elige POR OC**, entre los de `TELEFONOS_ETAPA_PRUEBAS` y
   nada mas (`updateMockOrder` valida contra lista cerrada; `runGuardrails` lo revalida igual). El
   selector vive en "Contexto del agente" del micrositio, pero el telefono **no es una
-  `dynamic_variable`**: no entra en `buildAgentDynamicVariables` (contrato de siete variables
+  `dynamic_variable`**: no entra en `buildAgentDynamicVariables` (contrato de ocho variables
   comparado por igualdad en un test) y no se le dice al interlocutor. El payload del Mock lleva
   `telefonos[]` con `do_not_call`/allowlist ya resueltos POR NUMERO — no hay mas campos globales
   de telefono, porque las OCs ya no comparten uno solo.
@@ -318,8 +337,7 @@ no minutos (ver UV-044).
   original, y son tres vistas del MISMO juego de OCs: cada OC se evalua por los tres criterios a
   la vez y puede estar en dos a la vez o en ninguna. Cada tabla edita los campos de SU criterio
   — A: estado/fechas/inscritos/conexiones; B: termino, conectados y `djs`; C: estado y
-  `ultimaActualizacion`. **Ninguna de las dos nuevas tiene columna «¿Llama?» ni forma de
-  llamar** (regla 2-bis). Cada tabla lista todas las OCs, las de su seccion primero y el resto
+  `ultimaActualizacion`. **B tiene columna «¿Llama?»; C sigue sin llamadas** (regla 2-bis). Cada tabla lista todas las OCs, las de su seccion primero y el resto
   con el motivo de exclusion: es un editor, hace falta poder agarrar cualquier OC y llevarla a la
   seccion que se quiere probar.
 - **`djs` se valida contra `conexiones`, no contra `inscritos`**: la seccion B divide DJ sobre
@@ -328,10 +346,20 @@ no minutos (ver UV-044).
 - **`ultimaActualizacion` es el unico dato que mueve la seccion C.** Se escribe como `updated_at`
   en todos los registros que expande la OC. Antes `toRecords` ponia "ahora" en cada lectura, con
   lo cual los dias pendientes eran siempre 0 y la seccion C era inalcanzable.
+- **El interruptor de llamadas automaticas del Mock es POR SECCION DE VOZ**, no global
+  (`autoCallEnabled: Record<CallSection, boolean>`). Encender A no enciende B: son dos
+  conversaciones distintas y el plan es Starter. `PUT /api/tablero/mock/auto-call` **exige**
+  `seccion` y rechaza `C_RECTIFICACION` — no hay default, porque adivinar cual quiso mover el
+  operador es como se termina llamando por el criterio equivocado. El trigger mira el
+  interruptor de `evaluacion.seccion`, que es la misma seccion que viaja a
+  `originateManualCall`.
+- **`evaluateMockOrder` decide la seccion de voz UNA vez** (`seccion`), y de ahi salen el motivo
+  del agente, las `dynamic_variables` y el interruptor que gobierna a esa OC. Antes el
+  `gateSeccionB(...)` se evaluaba suelto en tres lugares y podian discrepar.
 - **La criticidad del Semaforo no es configurable; los umbrales de LLAMADA si**
   (`call-rules.ts`). Son dos cosas distintas: ver docs/SEMAFORO_INTEGRACION.md §8-bis. Y los
-  umbrales configurables son **solo de la seccion A**: no existe un umbral de DJ ni de
-  rectificacion que tocar.
+  umbrales configurables son de **A y B**: B usa `dj.llamarSiDiasMayorA` y
+  `dj.nivelesQueLlaman`. C no llama. Ver la auditoría B/C del 2026-09-11 en `docs/status/`.
 - Las `dynamic_variables` del agente viven en `src/services/agent-variables.ts` — las usa el
   dispatcher al llamar y las expone `GET /api/tablero`, para que el modal de confirmacion
   muestre exactamente lo que se va a enviar. No las armes en el front.
