@@ -12,3 +12,6 @@ npm-debug.log*
 .dynalite.pid
 .claude/settings.local.json
 .env.*.tmp
+
+# Guia tecnica en PDF: se comparte fuera del repo, no se versiona (656K de binario)
+Umine-Voice-Guia-Tecnica.pdf
