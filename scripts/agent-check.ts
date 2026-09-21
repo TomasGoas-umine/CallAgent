@@ -3,7 +3,13 @@ import { env } from '../src/utils/env.js';
 import { ELEVENLABS_API_BASE } from '../src/services/elevenlabs-client.js';
 import { buildAgentDynamicVariables } from '../src/services/agent-variables.js';
 import { buildSenceAgentPatch } from './lib/sence-agent-config.js';
-import { evaluateAllMockOrders } from '../src/services/mock-tablero-store.js';
+import {
+  evaluateAllMockOrders,
+  evaluateMockOrder,
+  type MockOrderEvaluation,
+} from '../src/services/mock-tablero-store.js';
+import type { CallRules } from '../src/services/call-rules.js';
+import { isDeepStrictEqual } from 'node:util';
 
 function references(value: unknown): string[] {
   return [
@@ -55,6 +61,10 @@ async function main() {
       local.conversation_config.agent.first_message,
   );
   check(
+    'Velocidad de voz coincide',
+    remote.conversation_config.tts?.speed === local.conversation_config.tts.speed,
+  );
+  check(
     'Prompt general coincide',
     remote.conversation_config.agent.prompt.prompt ===
       local.conversation_config.agent.prompt.prompt,
@@ -81,6 +91,26 @@ async function main() {
   );
   if (env.elevenlabsAgentBranchId)
     check('Rama seleccionada coincide', remote.branch_id === env.elevenlabsAgentBranchId);
+  if (process.argv.includes('--local')) {
+    const liveResponse = await fetch(`http://127.0.0.1:${env.localServerPort}/api/tablero/mock`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!liveResponse.ok) throw new Error(`GET servidor local: HTTP ${liveResponse.status}`);
+    const live = (await liveResponse.json()) as {
+      callRules: CallRules;
+      ordenes: MockOrderEvaluation[];
+    };
+    check('El servidor local devuelve cursos para comprobar', live.ordenes.length > 0);
+    for (const item of live.ordenes) {
+      check(
+        `Servidor local: variables actuales en ${item.order.orderNumber} (si falla, reiniciar el backend)`,
+        isDeepStrictEqual(
+          item.variablesAgente,
+          evaluateMockOrder(item.order, live.callRules).variablesAgente,
+        ),
+      );
+    }
+  }
   const cases = evaluateAllMockOrders();
   check(
     `Los ${cases.length} casos del mock producen las ${keys.length} variables sin plantillas pendientes`,

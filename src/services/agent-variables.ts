@@ -39,6 +39,38 @@ export interface AgentVariablesInput {
   djPendientes?: number;
 }
 
+/** Resumen de apertura con el curso, sin empresa ni cifras internas. */
+function buildOpeningSummary(input: AgentVariablesInput): string {
+  const fallback = 'estamos dando seguimiento a tu curso.';
+  const course = input.courseName.trim();
+  if (!course || course === 'NO_DISPONIBLE' || /\{\{|\}\}/.test(course)) return fallback;
+
+  const days = Number.isInteger(input.diasRestantes) ? input.diasRestantes : undefined;
+  if (input.motivo.trim() === 'riesgo_dj_critico') {
+    return days !== undefined &&
+      days < 0 &&
+      Number.isInteger(input.djPendientes) &&
+      input.djPendientes! > 0
+      ? `aún figura pendiente hacer la declaración jurada del curso ${course}, que ya terminó.`
+      : fallback;
+  }
+  if (
+    input.motivo.trim() !== 'riesgo_conexion_critico' ||
+    !Number.isFinite(input.pctConexion) ||
+    input.pctConexion! < 0 ||
+    input.pctConexion! >= 100
+  )
+    return fallback;
+
+  if (days !== undefined && days < 0)
+    return `el curso ${course} terminó y aún figura pendiente su ejecución.`;
+  const pending = `aún figura pendiente la ejecución del curso ${course}`;
+  if (days === 0) return `${pending} y el curso termina hoy.`;
+  if (days === 1) return `${pending} y queda un día de curso.`;
+  if (days !== undefined) return `${pending} y quedan ${days} días de curso.`;
+  return `${pending}.`;
+}
+
 /**
  * Los nombres de las claves NO son libres: tienen que coincidir con las variables que declara
  * el agente en ElevenLabs, porque la API exige que el payload traiga TODAS las que el agente
@@ -46,7 +78,7 @@ export interface AgentVariablesInput {
  * `{{placeholder}}` en voz alta.
  *
  * Agente actual ("Sence", es): nombre_interlocutor, nombre_cliente, nombre_curso,
- * dias_restantes, pct_conexion, dj_pendientes, orden_compra y motivo. La configuración versionable vive en
+ * dias_restantes, pct_conexion, dj_pendientes, orden_compra, motivo y resumen_seguimiento. La configuración versionable vive en
  * scripts/lib/sence-agent-config.ts; el test de contrato verifica que ambas partes coincidan.
  *
  * Si cambias el prompt del agente y agregas una variable, hay que agregarla ACA tambien.
@@ -54,7 +86,7 @@ export interface AgentVariablesInput {
  */
 export function buildAgentDynamicVariables(input: AgentVariablesInput): Record<string, string> {
   return {
-    nombre_interlocutor: input.contactoNombre?.trim() || 'el encargado de capacitacion',
+    nombre_interlocutor: input.contactoNombre?.trim() || 'responsable de capacitación',
     nombre_cliente: input.clientName.trim(),
     nombre_curso: input.courseName.trim(),
     dias_restantes: Number.isFinite(input.diasRestantes) ? String(input.diasRestantes) : '',
@@ -72,5 +104,6 @@ export function buildAgentDynamicVariables(input: AgentVariablesInput): Record<s
         : '',
     orden_compra: input.orderNumber.trim(),
     motivo: input.motivo.trim(),
+    resumen_seguimiento: buildOpeningSummary(input),
   };
 }

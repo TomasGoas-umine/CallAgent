@@ -7,7 +7,7 @@ import { env } from '../src/utils/env.js';
 import { ELEVENLABS_API_BASE } from '../src/services/elevenlabs-client.js';
 import { buildSenceAgentPatch } from './lib/sence-agent-config.js';
 
-// Preserva voz, modelo, turnos, webhooks, privacidad y herramientas ajenas al patch.
+// Preserva identidad de voz, modelo, turnos, webhooks y ajustes ajenos al patch.
 function merge(
   base: Record<string, unknown>,
   patch: Record<string, unknown>,
@@ -72,6 +72,13 @@ async function main() {
     mode: 0o600,
   });
   if (
+    verified.conversation_config.agent.first_message !==
+      local.conversation_config.agent.first_message ||
+    verified.conversation_config.tts?.speed !== local.conversation_config.tts.speed ||
+    !isDeepStrictEqual(
+      verified.conversation_config.agent.dynamic_variables.dynamic_variable_placeholders,
+      local.conversation_config.agent.dynamic_variables.dynamic_variable_placeholders,
+    ) ||
     !isDeepStrictEqual(
       verified.conversation_config.agent.prompt.prompt,
       local.conversation_config.agent.prompt.prompt,

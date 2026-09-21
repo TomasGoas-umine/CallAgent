@@ -11,6 +11,57 @@ const input = {
 
 describe('datos conversacionales', () => {
   it.each([
+    [3, 'aún figura pendiente la ejecución del curso Excel y quedan 3 días de curso.'],
+    [1, 'aún figura pendiente la ejecución del curso Excel y queda un día de curso.'],
+    [0, 'aún figura pendiente la ejecución del curso Excel y el curso termina hoy.'],
+    [-2, 'el curso Excel terminó y aún figura pendiente su ejecución.'],
+    [undefined, 'aún figura pendiente la ejecución del curso Excel.'],
+    [NaN, 'aún figura pendiente la ejecución del curso Excel.'],
+    [Infinity, 'aún figura pendiente la ejecución del curso Excel.'],
+    [1.5, 'aún figura pendiente la ejecución del curso Excel.'],
+  ])('la apertura de conexión expresa el plazo %s sin inventar fechas', (days, expected) => {
+    expect(
+      buildAgentDynamicVariables({ ...input, pctConexion: 12.5, diasRestantes: days })
+        .resumen_seguimiento,
+    ).toBe(expected);
+  });
+
+  it('anuncia declaraciones pendientes aunque las conexiones estén completas', () => {
+    expect(
+      buildAgentDynamicVariables({
+        ...input,
+        motivo: 'riesgo_dj_critico',
+        diasRestantes: -10,
+        pctConexion: 100,
+        djPendientes: 6,
+      }).resumen_seguimiento,
+    ).toBe('aún figura pendiente hacer la declaración jurada del curso Excel, que ya terminó.');
+  });
+
+  it.each([
+    { courseName: '' },
+    { courseName: 'NO_DISPONIBLE' },
+    { courseName: '{{curso}}' },
+    { motivo: 'otro_motivo' },
+    { pctConexion: 100 },
+    { pctConexion: 101 },
+    { pctConexion: -1 },
+    { pctConexion: NaN },
+    { pctConexion: undefined },
+    { motivo: 'riesgo_dj_critico', diasRestantes: 0, djPendientes: 6 },
+    { motivo: 'riesgo_dj_critico', diasRestantes: 3, djPendientes: 6 },
+    { motivo: 'riesgo_dj_critico', diasRestantes: undefined, djPendientes: 6 },
+    { motivo: 'riesgo_dj_critico', diasRestantes: -10, djPendientes: 0 },
+    { motivo: 'riesgo_dj_critico', diasRestantes: -10, djPendientes: undefined },
+    { motivo: 'riesgo_dj_critico', diasRestantes: -10, djPendientes: 1.5 },
+  ])('usa una apertura neutra ante contexto insuficiente o inconsistente: %j', (overrides) => {
+    expect(
+      buildAgentDynamicVariables({ ...input, pctConexion: 12.5, diasRestantes: 3, ...overrides })
+        .resumen_seguimiento,
+    ).toBe('estamos dando seguimiento a tu curso.');
+  });
+
+  it.each([
     [12.5, '12.5%'],
     [55.00000000000001, '55%'],
     [99.6, '99.6%'],
@@ -31,7 +82,7 @@ describe('datos conversacionales', () => {
         pctConexion: NaN,
       }),
     ).toMatchObject({
-      nombre_interlocutor: 'el encargado de capacitacion',
+      nombre_interlocutor: 'responsable de capacitación',
       dias_restantes: '',
       pct_conexion: '',
     });

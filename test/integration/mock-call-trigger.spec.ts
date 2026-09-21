@@ -174,7 +174,7 @@ describe('mock-call-trigger', () => {
         expect(incomplete.variablesAgente).toMatchObject({
           nombre_cliente: '',
           nombre_curso: '',
-          nombre_interlocutor: 'el encargado de capacitacion',
+          nombre_interlocutor: 'responsable de capacitación',
         });
         await app.inject({
           method: 'POST',
@@ -252,6 +252,8 @@ describe('mock-call-trigger', () => {
       nombre_interlocutor: 'Francisca Rojas',
       nombre_cliente: 'Empresa actualizada',
       nombre_curso: 'Curso actualizado',
+      resumen_seguimiento:
+        'aún figura pendiente la ejecución del curso Curso actualizado y quedan 3 días de curso.',
       dias_restantes: '3',
       pct_conexion: '12.5%',
       dj_pendientes: '',
