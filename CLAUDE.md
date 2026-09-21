@@ -44,6 +44,12 @@ npm run tunnel:up            # quick tunnel de cloudflared + escribe PUBLIC_BASE
 npm run webhook:selftest     # verifica el circuito sin gastar un minuto de llamada
 npm run webhook:selftest -- --conversation-id=conv_x   # reproduce una llamada real ya ocurrida
 npm run providers:check      # §5 valida el registro del webhook contra la API de ElevenLabs
+npm run webhook:connect      # tunnel + registro HMAC + asignacion al agente (necesita webhooks_write)
+npm run webhook:configure    # solo el registro, con el tunnel ya abierto
+
+# El agente de ElevenLabs (contrato de dynamic_variables y prompt)
+npm run agent:check          # contrasta el contrato con el agente activo, sin originar llamadas
+npm run agent:configure      # escribe la configuracion del agente desde scripts/lib/sence-agent-config.ts
 
 # Registro de llamadas por API (camino pull — no depende del webhook)
 npm run calls:sync           # ElevenLabs + estado final en Twilio (solo GET)
@@ -148,9 +154,11 @@ npm run web:dev              # micrositio en :5173 (en otra terminal)
 - **El Tablero Original muestra las TRES secciones del Semaforo** (A Riesgo Conexion, B Riesgo
   DJ, C Rectificacion) en vinetas colapsables, de una sola lectura de `tablero-api`
   (`readSemaforoSecciones`). Las tres escalas son independientes y ninguna se calcula en el
-  front: llegan resueltas en `GET /api/tablero/original`. B y C **no tienen camino a una
-  llamada** en ningun modo (ADR-011): una DJ que falta o una OC Final que no llega se resuelven
-  con el OTIC, no con el alumno.
+  front: llegan resueltas en `GET /api/tablero/original`. **Ninguna de las tres llama desde
+  aca**: el Tablero Original es de solo lectura y su cliente HTTP no entra en ningun camino de
+  originacion. Y **C no llama desde ningun lado** (ADR-011, que ADR-012 solo reemplazo para B):
+  una OC Final que no llega se resuelve con el OTIC, no con el alumno. B si tiene camino a una
+  llamada, pero solo por el Tablero Mock o el Disparador (regla 2-bis).
 - **El disparador si permite escribir el telefono a mano** (desplegable de autorizados + el del
   curso + input manual). Eso NO debilita nada: el guardrail de allowlist vive en el backend
   (`services/guardrails.ts`), asi que un numero fuera de `ALLOWLIST_NUMBERS` responde 403 igual.
@@ -195,9 +203,9 @@ decide un humano.
 ElevenLabs lo rellena por su cuenta — en las llamadas Twilio de esta cuenta quedo con el numero
 de telefono, y en las pruebas del panel con un id de workspace. Por eso `extractAttributionId`
 exige forma de UUID. Y por eso el `followup_id` se inyecta en `elevenlabs-client.ts` y **no** en
-`buildAgentDynamicVariables`: esa funcion define el contrato conversacional del agente (siete
-variables comparadas por igualdad estricta contra `sence-agent-config.ts` en un test) y ademas
-alimenta el modal de confirmacion del micrositio.
+`buildAgentDynamicVariables`: esa funcion define el contrato conversacional del agente (las
+nueve variables que declara su prompt, comparadas por igualdad estricta contra
+`sence-agent-config.ts` en un test) y ademas alimenta el modal de confirmacion del micrositio.
 
 **Nunca registres una conversacion que ElevenLabs todavia esta procesando**
 (`initiated`/`in-progress`/`processing`). `recordCall` es una escritura condicional por
@@ -320,7 +328,7 @@ no minutos (ver UV-044).
 - **En el Tablero Mock el telefono se elige POR OC**, entre los de `TELEFONOS_ETAPA_PRUEBAS` y
   nada mas (`updateMockOrder` valida contra lista cerrada; `runGuardrails` lo revalida igual). El
   selector vive en "Contexto del agente" del micrositio, pero el telefono **no es una
-  `dynamic_variable`**: no entra en `buildAgentDynamicVariables` (contrato de ocho variables
+  `dynamic_variable`**: no entra en `buildAgentDynamicVariables` (contrato de nueve variables
   comparado por igualdad en un test) y no se le dice al interlocutor. El payload del Mock lleva
   `telefonos[]` con `do_not_call`/allowlist ya resueltos POR NUMERO — no hay mas campos globales
   de telefono, porque las OCs ya no comparten uno solo.
