@@ -7,10 +7,13 @@
  * tipado que devuelve `originateManualCall` a un codigo HTTP. Cualquier regla nueva va en el
  * servicio correspondiente, no aca.
  *
- * `POST /api/calls` es el unico camino de originacion: pasa por `originateManualCall`, que a su
- * vez delega en `dispatchFollowup`. No se saltea revalidacion contra el Semaforo, allowlist,
- * ventana horaria, cuota diaria ni la escritura condicional READY->DIALING. La idempotency key
- * es obligatoria (header `Idempotency-Key`, o `idempotencyKey` en el body).
+ * Dos rutas de aca pueden originar una llamada, las dos por una accion humana: `POST /api/calls`
+ * (el Disparador) y el `PATCH` del Tablero Mock, cuando el cambio guardado vuelve llamable a la OC
+ * y el interruptor de SU seccion esta encendido (`maybeTriggerMockCall`). Las dos pasan por
+ * `originateManualCall`, que delega en `dispatchFollowup`: no se saltea revalidacion contra el
+ * Semaforo, allowlist, whitelist de pruebas, ventana horaria, cuota diaria ni la escritura
+ * condicional READY->DIALING. En `POST /api/calls` la idempotency key es obligatoria (header
+ * `Idempotency-Key`, o `idempotencyKey` en el body); en el Mock la deriva el trigger.
  *
  * Nada de aca dispara nada por su cuenta: no hay cron, ni scheduler, ni polling. Un `POST` por
  * cada vez que un humano aprieta el boton.
