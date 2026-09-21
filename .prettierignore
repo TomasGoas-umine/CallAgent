@@ -4,3 +4,8 @@ cdk.out/
 coverage/
 package-lock.json
 docs/bpmn/*.mmd
+
+# Páginas HTML de docs/: se escriben a mano como documentos autocontenidos (un solo
+# archivo con su CSS y su JS). Prettier las reformatea a ~2x el largo y las vuelve
+# ilegibles sin arreglar nada — no son código de la aplicación.
+docs/*.html

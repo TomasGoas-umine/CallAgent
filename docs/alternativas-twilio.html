@@ -1,0 +1,1225 @@
+<title>Alternativas a Twilio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    color-scheme: light;
+    --ground: #eceff3;
+    --surface: #fcfdfe;
+    --surface-2: #f4f6f9;
+    --line: #d8dee6;
+    --line-soft: #e6eaf0;
+    --ink: #111820;
+    --ink-2: #4e5b6b;
+    --ink-3: #78869a;
+    --twilio: #2a78d6;
+    --plivo: #eb6834;
+    --telnyx: #1baf7a;
+    --netex: #eda100;
+    --critico: #b23a2b;
+    --ok: #1a7f52;
+    --shadow: 0 1px 2px rgba(17, 24, 32, 0.06), 0 8px 24px -16px rgba(17, 24, 32, 0.3);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --ground: #0e1218;
+      --surface: #171d25;
+      --surface-2: #1e252f;
+      --line: #2e3844;
+      --line-soft: #242d38;
+      --ink: #eef2f6;
+      --ink-2: #a8b4c2;
+      --ink-3: #7d8b9c;
+      --twilio: #3987e5;
+      --plivo: #d95926;
+      --telnyx: #199e70;
+      --netex: #c98500;
+      --critico: #e06a5a;
+      --ok: #3da97a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0e1218;
+    --surface: #171d25;
+    --surface-2: #1e252f;
+    --line: #2e3844;
+    --line-soft: #242d38;
+    --ink: #eef2f6;
+    --ink-2: #a8b4c2;
+    --ink-3: #7d8b9c;
+    --twilio: #3987e5;
+    --plivo: #d95926;
+    --telnyx: #199e70;
+    --netex: #c98500;
+    --critico: #e06a5a;
+    --ok: #3da97a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px;
+    display: flex; flex-direction: column; gap: 34px;
+  }
+
+  h1, h2, h3 { font-family: Archivo, "IBM Plex Sans", system-ui, sans-serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 700; letter-spacing: -0.025em; line-height: 1.05; }
+  h2 { font-size: 1.28rem; font-weight: 600; letter-spacing: -0.01em; }
+  h3 { font-size: 0.98rem; font-weight: 600; }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.72rem; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.13em; color: var(--ink-3);
+  }
+  .lede { color: var(--ink-2); max-width: 66ch; font-size: 1.02rem; }
+  .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  header.masthead { display: flex; flex-direction: column; gap: 14px; }
+  .masthead-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 22px; display: flex; flex-direction: column; gap: 18px;
+  }
+  .panel-head { display: flex; flex-direction: column; gap: 4px; }
+  .panel-note { font-size: 0.87rem; color: var(--ink-2); max-width: 72ch; }
+
+  .veredicto {
+    background: var(--surface); border: 1.5px solid var(--ink); border-radius: 10px;
+    padding: 24px; display: flex; flex-direction: column; gap: 16px; box-shadow: var(--shadow);
+  }
+  .veredicto-titular {
+    font-family: Archivo, sans-serif; font-size: clamp(1.25rem, 3.2vw, 1.7rem);
+    font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; text-wrap: balance;
+  }
+  .veredicto-cuerpo { color: var(--ink-2); font-size: 0.95rem; max-width: 70ch; }
+  .veredicto-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 14px; }
+  .vc { display: flex; flex-direction: column; gap: 2px; padding-left: 13px; border-left: 3px solid var(--line); }
+  .vc--ok { border-left-color: var(--ok); }
+  .vc--alto { border-left-color: var(--critico); }
+  .vc-v { font-family: Archivo, sans-serif; font-variant-numeric: tabular-nums; font-size: 1.45rem; font-weight: 700; letter-spacing: -0.02em; }
+  .vc-l { font-size: 0.78rem; color: var(--ink-2); }
+
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px 22px; }
+  .ctrl { display: flex; flex-direction: column; gap: 7px; }
+  .ctrl > label { font-size: 0.74rem; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.06em; }
+  .ctrl-row { display: flex; align-items: baseline; gap: 8px; }
+  .ctrl-val { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; font-size: 1.05rem; font-weight: 600; }
+  .ctrl-unit { font-size: 0.78rem; color: var(--ink-3); }
+  .ctrl-hint { font-size: 0.78rem; color: var(--ink-3); }
+  input[type="range"] { width: 100%; accent-color: var(--twilio); }
+  input[type="number"] {
+    width: 100%; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--surface-2); color: var(--ink);
+    font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; font-size: 0.92rem;
+  }
+  input[type="number"].vacio { border-style: dashed; border-color: var(--ink-3); }
+  select {
+    font: inherit; font-size: 0.8rem; font-family: "IBM Plex Mono", monospace;
+    padding: 5px 7px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--surface-2); color: var(--ink);
+  }
+  input:focus-visible, select:focus-visible { outline: 2px solid var(--twilio); outline-offset: 2px; }
+
+  .barras { display: flex; flex-direction: column; gap: 13px; }
+  .barra { display: grid; grid-template-columns: 116px 1fr; gap: 12px; align-items: center; }
+  .barra-nombre { display: flex; align-items: center; gap: 7px; font-size: 0.83rem; font-weight: 600; }
+  .barra-track { display: flex; gap: 2px; align-items: center; height: 30px; }
+  .barra-seg { height: 100%; border-radius: 3px; min-width: 2px; transition: width 0.25s ease; }
+  .barra-seg--num { opacity: 0.45; }
+  .barra-seg--vacio {
+    border: 1.5px dashed var(--ink-3); background: transparent; border-radius: 3px;
+    height: 100%; display: flex; align-items: center; padding-inline: 9px;
+  }
+  .barra-val {
+    font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums;
+    font-size: 0.82rem; font-weight: 600; white-space: nowrap; padding-left: 4px; color: var(--ink);
+  }
+  .barra-val small { color: var(--ink-3); font-weight: 400; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--ink-2); }
+  .legend-item { display: flex; align-items: center; gap: 7px; }
+  .legend-dash { width: 16px; height: 11px; border: 1.5px dashed var(--ink-3); border-radius: 3px; flex: none; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  th, td { text-align: right; padding: 9px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; vertical-align: middle; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--ink-3); font-weight: 600; border-bottom: 1px solid var(--line);
+  }
+  tbody td { font-variant-numeric: tabular-nums; }
+  td.mono { font-family: "IBM Plex Mono", monospace; }
+  tbody tr:last-child td { border-bottom: none; }
+  tr.base td { background: color-mix(in srgb, var(--twilio) 7%, transparent); }
+  td input[type="number"] { max-width: 96px; text-align: right; }
+  .sin-dato { color: var(--ink-3); font-style: italic; font-size: 0.8rem; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+  .delta-buena { color: var(--ok); font-weight: 600; }
+  .delta-mala { color: var(--critico); font-weight: 600; }
+  .verificado { color: var(--ok); font-size: 0.72rem; }
+  .nota-celda {
+    display: block; margin-top: 4px; font-size: 0.68rem; color: var(--ink-3);
+    font-style: italic; white-space: nowrap; text-align: right;
+  }
+  .bloqueado {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--critico);
+    border: 1px solid color-mix(in srgb, var(--critico) 40%, transparent);
+    border-radius: 20px; padding: 2px 7px; margin-left: 6px; white-space: nowrap;
+  }
+  tr.fuera td { opacity: 0.62; }
+  tr.fuera td:first-child { opacity: 1; }
+  .barra--fuera { opacity: 0.5; }
+  input[type="number"]:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .fichas { display: flex; flex-direction: column; gap: 16px; }
+  .ficha { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .ficha-head {
+    display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline;
+    padding: 14px 18px; background: var(--surface-2); border-bottom: 1px solid var(--line);
+  }
+  .ficha-head h3 { display: flex; align-items: center; gap: 8px; }
+  .ficha-tag {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em; padding: 3px 8px; border-radius: 20px;
+    border: 1px solid; white-space: nowrap;
+  }
+  .tag-si { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+  .tag-quiza { color: var(--netex); border-color: color-mix(in srgb, var(--netex) 55%, transparent); }
+  .tag-no { color: var(--critico); border-color: color-mix(in srgb, var(--critico) 50%, transparent); }
+  .tag-info { color: var(--ink-2); border-color: var(--line); }
+  .ficha-cuerpo { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+  .ficha-resumen { font-size: 0.88rem; color: var(--ink-2); max-width: 72ch; }
+  .proscon { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; }
+  .proscon h4 {
+    margin: 0 0 8px; font-family: "IBM Plex Mono", monospace; font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+  }
+  .proscon h4.pro { color: var(--ok); }
+  .proscon h4.con { color: var(--critico); }
+  .proscon ul { margin: 0; padding-left: 17px; display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; color: var(--ink-2); }
+  .proscon li::marker { color: var(--ink-3); }
+  .proscon b { color: var(--ink); font-weight: 600; }
+
+  .alert { display: flex; gap: 12px; padding: 13px 16px; border-radius: 9px; font-size: 0.87rem; border: 1px solid; align-items: flex-start; }
+  .alert--warn { background: color-mix(in srgb, var(--critico) 9%, var(--surface)); border-color: color-mix(in srgb, var(--critico) 40%, var(--surface)); color: var(--ink); }
+  .alert--ok { background: color-mix(in srgb, var(--ok) 9%, var(--surface)); border-color: color-mix(in srgb, var(--ok) 35%, var(--surface)); color: var(--ink); }
+
+  .estado-datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .ed {
+    border: 1px solid var(--line); border-radius: 9px; padding: 13px 15px;
+    display: flex; flex-direction: column; gap: 4px; font-size: 0.83rem;
+  }
+  .ed-h { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink); font-size: 0.85rem; }
+  .ed-icon { font-family: "IBM Plex Mono", monospace; font-weight: 700; }
+  .ed--si { border-left: 3px solid var(--ok); }
+  .ed--no { border-left: 3px solid var(--critico); }
+  .ed p { color: var(--ink-2); }
+
+  .notes { display: flex; flex-direction: column; gap: 12px; font-size: 0.87rem; color: var(--ink-2); }
+  .notes ul { margin: 0; padding-left: 19px; display: flex; flex-direction: column; gap: 8px; }
+  .notes li::marker { color: var(--ink-3); }
+  .notes b { color: var(--ink); }
+  code { font-family: "IBM Plex Mono", monospace; font-size: 0.87em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line-soft); }
+
+  .aclaracion {
+    display: flex; flex-direction: column; gap: 8px; font-size: 0.84rem; color: var(--ink-2);
+    background: var(--surface-2); border: 1px solid var(--line-soft);
+    border-radius: 9px; padding: 13px 16px;
+  }
+  .aclaracion b { color: var(--ink); }
+  .fuentes { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px 24px; }
+  .fuente { display: flex; flex-direction: column; gap: 3px; font-size: 0.82rem; }
+  .fuente b { font-weight: 600; color: var(--ink); font-size: 0.85rem; }
+  .fuente span { color: var(--ink-2); }
+  .fuente a {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.75rem; color: var(--twilio);
+    text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--twilio) 35%, transparent);
+    word-break: break-all; align-self: flex-start;
+  }
+  .fuente a:hover { border-bottom-color: var(--twilio); }
+
+  footer { font-size: 0.79rem; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 18px; }
+
+  @media (max-width: 640px) {
+    .proscon { grid-template-columns: 1fr; }
+    .barra { grid-template-columns: 1fr; gap: 5px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Umine Voice · Telefonia del agente</p>
+    <h1>Alternativas a Twilio</h1>
+    <p class="lede">
+      Plivo, Telnyx y Netexplora SIP contra Twilio, con el volumen real del proyecto: las
+      <b>61 OCs criticas</b> del Semaforo, una llamada de 80 segundos cada una. El costo de migrar
+      se trata como costo hundido — aca solo se compara lo que se paga todos los meses.
+    </p>
+    <div class="masthead-meta">
+      <span class="eyebrow">Precios consultados el 14-sep-2026</span>
+      <span class="eyebrow">Plivo descartado en la practica</span>
+    </div>
+  </header>
+
+  <section class="veredicto">
+    <p class="eyebrow">El veredicto</p>
+    <p class="veredicto-titular">
+      De las tres alternativas, una esta bloqueada, otra no se puede cotizar y de la tercera no se
+      sabe si existe. Lo unico accionable hoy es cambiar de producto dentro de Twilio.
+    </p>
+    <p class="veredicto-cuerpo">
+      <b>Plivo era la mejor en papel y quedo fuera por dos razones duras</b>: no deja registrarse
+      desde Chile — <i>"Signup is not available in your region at this time"</i>, comprobado a mano —
+      y su documentacion lista los paises donde vende numeros: <b>Chile no esta</b>. Telnyx es la
+      alternativa viable, pero no publica su tarifa a Chile por ningun lado. Netexplora ni siquiera
+      se puede confirmar que siga ofreciendo el servicio. Queda una mejora real y sin incognitas:
+      Twilio cobra <b>US$ 0,0706</b> por minuto si entras por SIP trunk, contra los US$ 0,0746 que
+      pagas hoy por Programmable Voice. Mismo proveedor, misma cuenta, 5% menos.
+    </p>
+    <div class="veredicto-cifras">
+      <div class="vc">
+        <span class="vc-v num" id="v-hoy">US$ 16,10</span>
+        <span class="vc-l">Hoy: Twilio Programmable Voice, 60/60</span>
+      </div>
+      <div class="vc vc--ok">
+        <span class="vc-v num" id="v-sip">US$ 15,61</span>
+        <span class="vc-l">Twilio por SIP trunk: lo unico ejecutable hoy</span>
+      </div>
+      <div class="vc vc--alto">
+        <span class="vc-v num" id="v-mejor">US$ 5,94</span>
+        <span class="vc-l">Lo que habria costado Plivo por segundo. No disponible en Chile</span>
+      </div>
+    </div>
+    <div class="alert alert--warn">
+      <span>⚠</span>
+      <span>
+        <b>Antes de evaluar tarifas de cualquier proveedor, intenta crear la cuenta.</b> Con Plivo se
+        perdio el tiempo comparando precios de un servicio al que no se puede entrar desde Chile.
+        Vale para Telnyx tambien: primero registro y numero disponible, despues cotizacion.
+      </span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Los supuestos</h2>
+      <p class="panel-note">
+        El escenario base es el de la pagina de costos: 61 llamadas de 80 s al mes. El
+        <b>intervalo de facturacion</b> es editable por proveedor porque es, de lejos, la variable
+        que mas mueve el total.
+      </p>
+    </div>
+    <div class="controls">
+      <div class="ctrl">
+        <label for="llamadas">Llamadas al mes</label>
+        <div class="ctrl-row">
+          <input type="number" id="llamadas" value="61" min="1" step="1" style="max-width:100px">
+          <span class="ctrl-unit">llamadas</span>
+        </div>
+        <span class="ctrl-hint">61 = las criticas de hoy (42 en A + 19 en B)</span>
+      </div>
+      <div class="ctrl">
+        <label for="dur">Duracion promedio</label>
+        <div class="ctrl-row">
+          <span class="ctrl-val" id="dur-val">80</span><span class="ctrl-unit">segundos</span>
+        </div>
+        <input type="range" id="dur" min="20" max="180" step="1" value="80">
+        <span class="ctrl-hint" id="hint-aire"></span>
+      </div>
+      <div class="ctrl">
+        <label for="clp">Dolar observado</label>
+        <div class="ctrl-row">
+          <input type="number" id="clp" value="950" min="1" step="1" style="max-width:100px">
+          <span class="ctrl-unit">CLP por US$</span>
+        </div>
+        <span class="ctrl-hint">Para convertir una cotizacion en pesos</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Precio, lado a lado</h2>
+      <p class="panel-note">
+        Las celdas con <span class="verificado">✓</span> salen de una fuente oficial; las vacias
+        siguen vacias porque el proveedor <b>no publica el dato</b>, no porque falte buscarlo.
+        Cuando te coticen, escribe el valor y la comparacion se completa sola.
+      </p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Proveedor</th>
+            <th scope="col">US$/min a movil CL</th>
+            <th scope="col">Numero CL US$/mes</th>
+            <th scope="col">Facturacion</th>
+            <th scope="col">Total mensual</th>
+            <th scope="col">vs Twilio hoy</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="base">
+            <td><span class="dot" style="background:var(--twilio)"></span><b>Twilio</b> <span class="sin-dato">Programmable Voice</span></td>
+            <td class="mono">0,0746 <span class="verificado">✓</span></td>
+            <td class="mono">7,00 <span class="verificado">✓</span></td>
+            <td class="mono">60/60</td>
+            <td class="mono" id="tot-twilio">—</td>
+            <td class="mono">linea base · hoy</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:var(--twilio)"></span><b>Twilio</b> <span class="sin-dato">SIP trunk</span></td>
+            <td class="mono">0,0706 <span class="verificado">✓</span></td>
+            <td class="mono">7,00 <span class="verificado">✓</span></td>
+            <td class="mono">60/60</td>
+            <td class="mono" id="tot-twiliosip">—</td>
+            <td class="mono" id="delta-twiliosip">—</td>
+          </tr>
+          <tr class="fuera">
+            <td><span class="dot" style="background:var(--plivo)"></span><b>Plivo</b> <span class="bloqueado">no disponible en Chile</span></td>
+            <td class="mono">0,0730 <span class="verificado">✓</span></td>
+            <td><input type="number" id="num-plivo" step="0.25" min="0" placeholder="n/d" aria-label="Precio mensual del numero en Plivo" disabled></td>
+            <td>
+              <select id="fact-plivo" aria-label="Intervalo de facturacion de Plivo">
+                <option value="1" selected>1/1</option>
+                <option value="60">60/60</option>
+              </select>
+            </td>
+            <td class="mono" id="tot-plivo">—</td>
+            <td class="mono" id="delta-plivo">—</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:var(--telnyx)"></span><b>Telnyx</b></td>
+            <td>
+              <input type="number" id="min-telnyx" step="0.001" min="0" placeholder="?" aria-label="Tarifa por minuto de Telnyx a movil chileno">
+              <span class="nota-celda">no publica el destino CL</span>
+            </td>
+            <td class="mono">7,25 <span class="verificado">✓</span></td>
+            <td class="mono">60/60</td>
+            <td class="mono" id="tot-telnyx">—</td>
+            <td class="mono" id="delta-telnyx">—</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:var(--netex)"></span><b>Netexplora</b></td>
+            <td>
+              <input type="number" id="min-netex" step="0.001" min="0" placeholder="?" aria-label="Tarifa por minuto de Netexplora">
+              <span class="nota-celda">solo por cotizacion</span>
+            </td>
+            <td>
+              <input type="number" id="num-netex" step="0.25" min="0" placeholder="?" aria-label="Precio mensual del numero en Netexplora">
+              <span class="nota-celda">solo por cotizacion</span>
+            </td>
+            <td>
+              <select id="fact-netex" aria-label="Intervalo de facturacion de Netexplora">
+                <option value="60" selected>60/60</option>
+                <option value="1">1/1</option>
+              </select>
+            </td>
+            <td class="mono" id="tot-netex">—</td>
+            <td class="mono" id="delta-netex">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="aclaracion">
+      <p>
+        <b>Por que la celda de Telnyx esta vacia si publican precios.</b> Telnyx publica su tarifario
+        completo, pero <b>referido a Estados Unidos</b>: plataforma US$ 0,002/min, SIP saliente desde
+        US$ 0,005/min, entrante desde US$ 0,0032/min, numero local EE.UU. US$ 1,00/mes. Lo unico que
+        no publica — ni en su web ni en su API — es cuanto cuesta el minuto <b>a un movil chileno</b>,
+        que es lo que compara esta columna. El unico dato chileno suyo que si esta publicado es el
+        numero: US$ 7,25/mes. Su tarifario completo esta mas abajo, en la ficha de Telnyx.
+      </p>
+      <p>
+        Netexplora cotiza en pesos: para pasar un valor a dolares, divide por el tipo de cambio de
+        arriba — a $950, un minuto de $20 CLP son US$ 0,021.
+      </p>
+    </div>
+
+    <div class="barras" id="barras" role="img" aria-label="Costo mensual de telefonia por proveedor">
+      <div class="barra">
+        <span class="barra-nombre"><span class="swatch" style="background:var(--twilio)"></span>Twilio hoy</span>
+        <div class="barra-track" id="bar-twilio"></div>
+      </div>
+      <div class="barra">
+        <span class="barra-nombre"><span class="swatch" style="background:var(--twilio)"></span>Twilio SIP</span>
+        <div class="barra-track" id="bar-twiliosip"></div>
+      </div>
+      <div class="barra">
+        <span class="barra-nombre"><span class="swatch" style="background:var(--plivo)"></span>Plivo <span class="sin-dato">(n/d)</span></span>
+        <div class="barra-track barra--fuera" id="bar-plivo"></div>
+      </div>
+      <div class="barra">
+        <span class="barra-nombre"><span class="swatch" style="background:var(--telnyx)"></span>Telnyx</span>
+        <div class="barra-track" id="bar-telnyx"></div>
+      </div>
+      <div class="barra">
+        <span class="barra-nombre"><span class="swatch" style="background:var(--netex)"></span>Netexplora</span>
+        <div class="barra-track" id="bar-netex"></div>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="legend-item"><span class="swatch" style="background:var(--ink-3)"></span> Minutos del mes</span>
+      <span class="legend-item"><span class="swatch" style="background:var(--ink-3); opacity:0.45"></span> Arriendo del numero</span>
+      <span class="legend-item"><span class="legend-dash"></span> Sin tarifa publica: hay que cotizar</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Que se encontro y que no</h2>
+      <p class="panel-note">
+        Lo que hace falta para comparar los cuatro proveedores, y donde termino cada dato. Que un
+        valor no exista tambien es un resultado: dos de estos cierran la evaluacion de Plivo sin
+        necesidad de mirar una tarifa.
+      </p>
+    </div>
+    <div class="estado-datos">
+      <div class="ed ed--si">
+        <span class="ed-h"><span class="ed-icon">✓</span> Twilio · minuto y numero</span>
+        <p>Los dos productos: Programmable Voice US$ 0,0746 y SIP trunk US$ 0,0706. Numero local
+        CL US$ 7,00. Consultado con las credenciales de la cuenta.</p>
+      </div>
+      <div class="ed ed--si">
+        <span class="ed-h"><span class="ed-icon">✓</span> Plivo · minuto e intervalo</span>
+        <p>US$ 0,0730/min a movil chileno, del tarifario publico. El intervalo 1/1 sale de su
+        pagina de SIP Trunking, que es el producto que usariamos.</p>
+      </div>
+      <div class="ed ed--si">
+        <span class="ed-h"><span class="ed-icon">✓</span> Telnyx · numero chileno</span>
+        <p>US$ 7,25 al mes, publicado en su pagina de numeros de Chile. Ligeramente mas caro que
+        Twilio.</p>
+      </div>
+      <div class="ed ed--no">
+        <span class="ed-h"><span class="ed-icon">✗</span> Plivo · numero chileno</span>
+        <p>No existe. Su documentacion lista 12 paises con numeracion y <b>Chile no esta</b>. La
+        pagina <code>/pricing/cl/</code> mostraba US$ 0,50 porque sirve la tabla de Estados Unidos:
+        ese valor nunca fue el de Chile.</p>
+      </div>
+      <div class="ed ed--no">
+        <span class="ed-h"><span class="ed-icon">✗</span> Plivo · cuenta</span>
+        <p>Bloqueada. El registro desde Chile responde <i>"Signup is not available in your region at
+        this time"</i>. Comprobado a mano, no deducido.</p>
+      </div>
+      <div class="ed ed--si">
+        <span class="ed-h"><span class="ed-icon">✓</span> Telnyx · tarifario de componentes</span>
+        <p>Publica plataforma (US$ 0,002/min), SIP saliente desde US$ 0,005, entrante desde
+        US$ 0,0032, grabacion, streaming, numeros y su motor de voz a US$ 0,05/min.</p>
+      </div>
+      <div class="ed ed--no">
+        <span class="ed-h"><span class="ed-icon">✗</span> Telnyx · minuto a movil chileno</span>
+        <p>Lo unico que falta, y es justo lo comparable con Twilio. Sus tarifas de partida son de
+        EE.UU.; la pagina <code>/pricing/elastic-sip/cl</code> sirve el mismo contenido que la
+        global y no trae ni un valor chileno. Su API publica de precios responde 404.</p>
+      </div>
+      <div class="ed ed--no">
+        <span class="ed-h"><span class="ed-icon">✗</span> Netexplora · todo</span>
+        <p>Ni tarifas ni servicio: la pagina de SIP Trunking da 404 y el sitio no menciona telefonia.
+        Lo unico que se conoce es la descripcion que quedo en el indice de busqueda.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Factibilidad tecnica, proveedor por proveedor</h2>
+      <p class="panel-note">
+        Las alternativas entran por el mismo lugar: <b>SIP trunking de ElevenLabs</b>, que soporta
+        "Twilio, Vonage, RingCentral, Sinch, Infobip, Telnyx, Exotel, Plivo, Bandwidth y otros que
+        cumplan el estandar SIP". Requisitos iguales para todos: codecs G711 o G722, autenticacion
+        digest o lista blanca de IP, y senalizacion por TCP (5060) o TLS (5061). El costo de hacer
+        el cambio se considera hundido, asi que lo que sigue es solo <i>que hay que resolver</i>,
+        no cuanto cuesta resolverlo.
+      </p>
+    </div>
+
+    <div class="fichas">
+
+      <!-- ============ TWILIO SIP ============ -->
+      <div class="ficha">
+        <div class="ficha-head">
+          <h3><span class="swatch" style="background:var(--twilio)"></span>Twilio por SIP trunk</h3>
+          <span class="ficha-tag tag-si">El cambio mas facil</span>
+          <span class="ficha-tag tag-info">US$ 0,0706/min · −5%</span>
+          <span class="ficha-tag tag-info">Numero US$ 7,00</span>
+        </div>
+        <div class="ficha-cuerpo">
+          <p class="ficha-resumen">
+            No es un proveedor nuevo: es el mismo Twilio, cobrado por su producto de trunking en vez
+            de Programmable Voice. Sale <b>un 5% mas barato el minuto</b> y conserva todo lo que ya
+            funciona — la API de llamadas que alimenta la reconciliacion, las credenciales, el
+            numero, el <code>providers:check</code>. Es la unica opcion de esta pagina que no
+            introduce ninguna incognita.
+          </p>
+          <div class="proscon">
+            <div>
+              <h4 class="pro">A favor</h4>
+              <ul>
+                <li><b>Mismo proveedor, misma API de estado de llamada</b>: la reconciliacion contra
+                    Twilio sigue funcionando tal cual.</li>
+                <li>Tarifa y numero verificados contra tu propia cuenta, no contra una pagina
+                    publica.</li>
+                <li>Un 5% menos por minuto sin tocar contratos ni abrir cuentas.</li>
+                <li>Si despues quieres irte a otro, ya quedaste en SIP: el segundo salto es menor.</li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="con">En contra</h4>
+              <ul>
+                <li><b>Sigue facturando 60/60</b>: con llamadas de 80 s pagas 120 s igual.</li>
+                <li>El ahorro es chico en plata: son centavos al mes a este volumen.</li>
+                <li>No resuelve el problema del numero: el <code>+1</code> sigue siendo <code>+1</code>
+                    salvo que compres el numero chileno, que cuesta lo mismo por cualquier via.</li>
+                <li>Hay que configurar el trunk igual, con sus credenciales y su FQDN.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ PLIVO ============ -->
+      <div class="ficha">
+        <div class="ficha-head">
+          <h3><span class="swatch" style="background:var(--plivo)"></span>Plivo</h3>
+          <span class="ficha-tag tag-no">Descartado · no disponible en Chile</span>
+          <span class="ficha-tag tag-info">Sin numeros chilenos</span>
+          <span class="ficha-tag tag-info">Registro bloqueado</span>
+        </div>
+        <div class="ficha-cuerpo">
+          <p class="ficha-resumen">
+            <b>Era la mejor opcion de la comparacion, y no se puede usar.</b> Su tarifa por minuto
+            es casi igual a la de Twilio, pero su pagina de SIP Trunking dice algo que ninguna otra
+            dice: <b>"el intervalo de facturacion para Estados Unidos y Canada es 6/6, Brasil 30/30
+            y para todos los destinos internacionales importantes es 1/1"</b>. Facturar por segundo
+            con llamadas de 80 s evita pagar 40 segundos de aire por llamada — a este volumen habria
+            sido un <b id="ahorro-1-1">31%</b> menos de telefonia, el unico ahorro de dos digitos de
+            toda la pagina. Habria sido: de Chile no se puede ni abrir la cuenta, y aunque se
+            pudiera, no venden numeracion chilena.
+          </p>
+          <div class="alert alert--warn">
+            <span>⚠</span>
+            <span>
+              <b>Dos bloqueos, ninguno negociable.</b> (1) El registro responde
+              <i>"Signup is not available in your region at this time"</i> desde Chile — comprobado
+              a mano el 14-sep-2026. (2) Su documentacion lista los paises donde vende numeros:
+              <b>Estados Unidos e India</b> en pago por uso, y <b>Canada, Reino Unido, Australia,
+              Nueva Zelanda, Singapur, Brasil, Emiratos Arabes, Arabia Saudita, Malasia e
+              Indonesia</b> solo con plan Enterprise de <b>US$ 1.000 al mes minimo</b>. Chile no
+              aparece en ninguna de las dos listas.
+            </span>
+          </div>
+          <div class="proscon">
+            <div>
+              <h4 class="pro">Lo que habria aportado</h4>
+              <ul>
+                <li><b>Facturacion por segundo</b> en destinos internacionales importantes: con
+                    llamadas de 80 s, un 31% menos que cualquier proveedor que cobre 60/60.</li>
+                <li>Tarifa a movil chileno publica y verificable, sin pasar por ventas.</li>
+                <li>ElevenLabs lo nombra entre los proveedores SIP compatibles: la integracion
+                    tecnica no era el problema.</li>
+                <li>API muy parecida a la de Twilio: el modulo de estado de llamada se habria
+                    reescrito casi campo por campo.</li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="con">Por que queda fuera</h4>
+              <ul>
+                <li><b>No se puede crear una cuenta desde Chile.</b> No es un detalle de precio: es
+                    la puerta cerrada.</li>
+                <li><b>No venden numeros chilenos.</b> Su cobertura de numeracion son 12 paises y
+                    Chile no esta en la lista.</li>
+                <li>Fuera de Estados Unidos e India, cualquier numero exige <b>plan Enterprise con
+                    minimo de US$ 1.000 al mes</b>: sesenta veces el gasto total de este proyecto.</li>
+                <li>Su marketing habla de "50+ paises" para numeros; su documentacion lista 12. Vale
+                    la pena mirar siempre la documentacion.</li>
+                <li>Podria usarse solo como ruta de salida con numero extranjero — pero eso empeora
+                    justo lo que hay que mejorar: llamar con un numero que no es chileno.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ TELNYX ============ -->
+      <div class="ficha">
+        <div class="ficha-head">
+          <h3><span class="swatch" style="background:var(--telnyx)"></span>Telnyx</h3>
+          <span class="ficha-tag tag-si">Viable · la mejor documentada</span>
+          <span class="ficha-tag tag-info">Numero CL US$ 7,25</span>
+          <span class="ficha-tag tag-info">SIP saliente desde US$ 0,005</span>
+          <span class="ficha-tag tag-no">Falta la tarifa a Chile</span>
+        </div>
+        <div class="ficha-cuerpo">
+          <p class="ficha-resumen">
+            La unica alternativa con <b>guia propia paso a paso en la documentacion de ElevenLabs</b>:
+            siete pasos en el panel de Telnyx — conexion SIP tipo FQDN apuntando a
+            <code>sip.rtc.elevenlabs.io</code>, credenciales para salientes, formato +E.164 sobre
+            TCP, perfil de voz saliente y asignacion del numero. Tecnicamente es el camino con menos
+            sorpresas, y <b>publica su tarifario componente por componente</b>. Lo unico que no
+            publica es justo el numero que hace falta para compararlo con Twilio: cuanto cuesta el
+            minuto <i>a movil chileno</i>. Todo lo que muestra abajo son tarifas de partida
+            referidas a Estados Unidos; el destino internacional se suma encima.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Lo que Telnyx si publica</th>
+                  <th scope="col">Tarifa</th>
+                  <th scope="col">Aplica a</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Voice API — cargo de plataforma</td>
+                  <td class="mono">US$ 0,002 / min</td>
+                  <td>Todas las llamadas, encima del trunking</td>
+                </tr>
+                <tr>
+                  <td>SIP trunking saliente</td>
+                  <td class="mono">desde US$ 0,005 / min</td>
+                  <td><b>Local EE.UU.</b> — Chile se cotiza aparte</td>
+                </tr>
+                <tr>
+                  <td>SIP trunking entrante</td>
+                  <td class="mono">desde US$ 0,0032 / min</td>
+                  <td>Local EE.UU.</td>
+                </tr>
+                <tr>
+                  <td>Grabacion de llamada</td>
+                  <td class="mono">US$ 0,002 / min</td>
+                  <td>Opcional — con SIP, ElevenLabs no la controla</td>
+                </tr>
+                <tr>
+                  <td>Media streaming (WebSockets)</td>
+                  <td class="mono">US$ 0,0035 / min</td>
+                  <td>Solo si se usa audio por websocket</td>
+                </tr>
+                <tr>
+                  <td>Numero local EE.UU.</td>
+                  <td class="mono">US$ 1,00 / mes</td>
+                  <td>Desde US$ 0,79 por volumen</td>
+                </tr>
+                <tr>
+                  <td><b>Numero local Chile</b></td>
+                  <td class="mono"><b>US$ 7,25 / mes</b></td>
+                  <td>El unico dato chileno publicado</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="panel-note">
+            Planes: <b>pago por uso sin minimo</b> (500 llamadas concurrentes incluidas),
+            <b>Committed</b> desde US$ 500/mes con descuentos por volumen, y <b>Enterprise</b> desde
+            US$ 5.000/mes. Para este proyecto basta el primero.
+          </p>
+          <div class="proscon">
+            <div>
+              <h4 class="pro">A favor</h4>
+              <ul>
+                <li><b>Integracion documentada por ElevenLabs</b>, no deducida: menos prueba y error.</li>
+                <li>Precio del numero chileno publicado y solo 25 centavos sobre Twilio.</li>
+                <li><b>Tarifario abierto componente por componente</b>: plataforma, trunking
+                    entrante y saliente, grabacion, streaming y numeros.</li>
+                <li>Pago por uso sin minimo mensual y 500 llamadas concurrentes incluidas.</li>
+                <li>Sin plataforma minima ni compromiso; pago por uso desde el primer minuto.</li>
+                <li>Red propia y buena reputacion de latencia, que importa en voz en tiempo real.</li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="con">En contra</h4>
+              <ul>
+                <li><b>Publica todo menos lo que hace falta</b>: el minuto a movil chileno no esta
+                    en ninguna pagina ni en su API. Las tarifas de partida son de EE.UU.</li>
+                <li><b>No esta comprobado que acepte registro desde Chile</b>: despues de lo de
+                    Plivo, es lo primero que hay que probar.</li>
+                <li>Factura 60/60 igual que Twilio: nada que ganar por llamadas cortas.</li>
+                <li>Numero mas caro que Twilio, aunque por poco.</li>
+                <li>Cuenta nueva, credenciales nuevas y un modulo de estado de llamada nuevo.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ NETEXPLORA ============ -->
+      <div class="ficha">
+        <div class="ficha-head">
+          <h3><span class="swatch" style="background:var(--netex)"></span>Netexplora SIP</h3>
+          <span class="ficha-tag tag-no">No verificable hoy</span>
+          <span class="ficha-tag tag-info">Pagina 404</span>
+          <span class="ficha-tag tag-info">Sin tarifas publicas</span>
+        </div>
+        <div class="ficha-cuerpo">
+          <p class="ficha-resumen">
+            Era la opcion conceptualmente mas interesante — un carrier chileno, con numeracion
+            chilena y cobro en pesos — pero <b>no se pudo confirmar que el servicio exista hoy</b>.
+            Su pagina de SIP Trunking Flex responde 404, y el sitio actual ofrece hosting, dominios,
+            VPS y Microsoft 365, sin una sola mencion de telefonia, voz ni SIP. Lo unico que queda
+            es la descripcion indexada por los buscadores: cobro por canales usados al cierre de mes,
+            numeraciones por adelantado, llamadas contra saldo prepago, numeracion geografica
+            chilena y sin permanencia.
+          </p>
+          <div class="alert alert--warn">
+            <span>⚠</span>
+            <span>
+              <b>Tres preguntas antes de considerarlo.</b> (1) ¿Siguen ofreciendo SIP Trunking?
+              (2) ¿Aceptan que el trunk termine contra un servicio en la nube — FQDN
+              <code>sip.rtc.elevenlabs.io</code>, autenticacion digest o lista blanca de IP — y no
+              contra una central IP con IP fija? (3) ¿Entregan algun API o webhook con el estado
+              final de cada llamada? Sin eso se pierde la reconciliacion que resuelve UV-053 y el
+              proyecto vuelve a no distinguir una llamada no contestada.
+            </span>
+          </div>
+          <div class="proscon">
+            <div>
+              <h4 class="pro">A favor, si resulta que existe</h4>
+              <ul>
+                <li><b>Numero chileno de verdad</b>, no un <code>+1</code>: lo unico de esta pagina
+                    que puede subir la tasa de contestacion.</li>
+                <li>Llamada nacional en vez de terminacion internacional: otra estructura de costo,
+                    probablemente bastante mas barata por minuto.</li>
+                <li>Factura en pesos, con contraparte y soporte en Chile.</li>
+                <li>Camino natural para tramitar la numeracion <code>+56 600</code> /
+                    <code>+56 809</code> que exige el regulador (UV-027).</li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="con">En contra</h4>
+              <ul>
+                <li><b>No hay evidencia publica de que el servicio siga vivo</b>: pagina caida y
+                    sitio sin telefonia.</li>
+                <li>Cero precios publicados: todo pasa por cotizacion y tiempos de ventas.</li>
+                <li><b>Riesgo de perder el registro del resultado</b>: sin API de llamadas se caen
+                    438 lineas de reconciliacion ya escritas y funcionando.</li>
+                <li>ElevenLabs no lo nombra: que cumpla el estandar SIP hay que probarlo.</li>
+                <li>Un carrier tradicional puede exigir SBC, IP fija o hardware que este proyecto
+                    no tiene.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>El hallazgo que no era sobre telefonia</h2>
+      <p class="panel-note">
+        Buscando tarifas de Telnyx aparecio que tambien venden el <b>motor de voz completo</b> —
+        orquestacion, transcripcion y sintesis en una sola tarifa — o sea, compiten con ElevenLabs,
+        no con Twilio. Y lo publican: <b>US$ 0,05 por minuto</b>, con el LLM aparte a unos
+        US$ 0,004/min en sus propias GPU. Contra lo que pagamos hoy en creditos de ElevenLabs, eso
+        es casi la mitad.
+      </p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Capa de IA conversacional</th>
+            <th scope="col">US$ por minuto</th>
+            <th scope="col" id="col-mes">Al mes, 61 llamadas de 80 s</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="base">
+            <td><b>ElevenLabs</b> <span class="sin-dato">hoy · 7,7 creditos/s</span></td>
+            <td class="mono" id="ia-el-min">US$ 0,0925</td>
+            <td class="mono" id="ia-el-mes">US$ 7,52</td>
+          </tr>
+          <tr>
+            <td><b>Telnyx Voice AI</b> <span class="sin-dato">motor + LLM en sus GPU</span></td>
+            <td class="mono" id="ia-tx-min">US$ 0,0540</td>
+            <td class="mono" id="ia-tx-mes">US$ 4,39</td>
+          </tr>
+          <tr class="total">
+            <td>Diferencia</td>
+            <td class="mono" id="ia-dif-min">—</td>
+            <td class="mono" id="ia-dif-mes">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert--warn">
+      <span>⚠</span>
+      <span>
+        <b>Es otra decision, no la de esta pagina.</b> Cambiar de carrier mueve el endpoint de
+        originacion. Cambiar de motor de voz significa rehacer el agente entero en otra plataforma:
+        el prompt del agente Sence, las ocho <code>dynamic_variables</code>, los criterios de
+        evaluacion, la extraccion de campos y todo el registro de llamadas, que hoy lee la API de
+        conversaciones de ElevenLabs. Y queda abierta la pregunta que ningun tarifario responde:
+        como suena su voz en espanol de Chile.
+      </span>
+    </div>
+    <p class="panel-note" id="ia-escala">
+      A este volumen la diferencia es chica en plata. La cifra cambia de naturaleza con el volumen:
+      a 10.000 minutos al mes serian unos US$ 385 de diferencia. Es la palanca que importa si el
+      piloto escala, no hoy.
+    </p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>La variable que si mueve la aguja</h2>
+      <p class="panel-note">
+        Una llamada que nadie contesta cuesta el minuto igual y no consigue nada. Si un numero
+        chileno hace que mas gente conteste, eso vale mas que cualquier diferencia de tarifa.
+        Mueve las dos tasas y mira el costo por <i>contacto logrado</i>, no por llamada.
+      </p>
+    </div>
+    <div class="controls">
+      <div class="ctrl">
+        <label for="tasa-a">Contestan con el numero +1 actual</label>
+        <div class="ctrl-row"><span class="ctrl-val" id="tasa-a-val">50</span><span class="ctrl-unit">%</span></div>
+        <input type="range" id="tasa-a" min="10" max="100" step="5" value="50">
+      </div>
+      <div class="ctrl">
+        <label for="tasa-b">Contestan con un numero chileno</label>
+        <div class="ctrl-row"><span class="ctrl-val" id="tasa-b-val">70</span><span class="ctrl-unit">%</span></div>
+        <input type="range" id="tasa-b" min="10" max="100" step="5" value="70">
+      </div>
+    </div>
+    <div class="alert alert--ok" id="contacto-alert">
+      <span>→</span>
+      <span id="contacto-msg"></span>
+    </div>
+    <p class="panel-note">
+      Las dos tasas son supuestos tuyos, no datos medidos: de tus 22 llamadas, solo 2 quedaron como
+      <code>no-answer</code> y 6 murieron por falta de creditos, asi que todavia no hay muestra para
+      estimar cuanta gente cuelga por ver un numero extranjero. Es exactamente lo que conviene medir
+      antes de mover nada.
+    </p>
+  </section>
+
+  <section class="panel notes">
+    <h2>Letra chica</h2>
+    <ul>
+      <li>
+        <b>Todas las alternativas suponen abandonar la integracion nativa Twilio-ElevenLabs</b>
+        (ADR-003, Opcion A) y pasar a SIP trunking. No es solo cambiar de proveedor: es cambiar la
+        arquitectura de telefonia, aunque el codigo de negocio no se entere. El endpoint de
+        originacion pasa de <code>/twilio/outbound-call</code> a <code>/sip-trunk/outbound-call</code>.
+      </li>
+      <li>
+        <b>Con SIP se pierden dos funciones que hoy existen.</b> ElevenLabs ignora
+        <code>twilio_call_recording_enabled</code> y <code>twilio_machine_detection</code> para
+        proveedores que no son Twilio: la grabacion habria que resolverla en el trunk, y la
+        deteccion de contestador automatico deja de estar disponible.
+      </li>
+      <li>
+        <b>El costo de ElevenLabs no cambia.</b> Los creditos de conversacion se cobran igual por
+        Twilio nativo o por SIP; aca se compara solo la capa telefonica, que hoy son
+        <span id="pct-telefonia">55%</span> del costo de una llamada.
+      </li>
+      <li>
+        <b>Cambiar de proveedor rompe la reconciliacion contra Twilio</b> que se acaba de construir
+        (<code>twilio-calls-client.ts</code> + <code>dialing-reconciler.ts</code>, 438 lineas). Con
+        Plivo o Telnyx se reescribe contra su API equivalente; con un carrier sin API, se pierde.
+        No es costo de migracion — es una funcion que deja de existir si el proveedor no la ofrece.
+      </li>
+      <li>
+        <b>Ninguno resuelve UV-027 por si solo.</b> La exigencia de numeracion <code>+56 600</code>
+        / <code>+56 809</code> con KYC local para comunicaciones automatizadas es regulatoria, no
+        tecnica.
+      </li>
+      <li>
+        <b>La disponibilidad se verifica antes que el precio.</b> Plivo tiene la mejor estructura de
+        cobro de toda la comparacion y no sirve: no deja registrarse desde Chile ni vende numeracion
+        chilena. Comparar tarifas de un proveedor al que no puedes entrar es tiempo perdido.
+      </li>
+      <li>
+        <b>Las tarifas cambian y estas son de un dia.</b> Twilio expone su Pricing API y se puede
+        reconsultar cuando quieras; los demas no. Si la decision se toma en un mes, vuelve a pedir
+        los numeros.
+      </li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>De donde salio cada valor</h2>
+      <p class="panel-note">Lo que no esta aca no esta en la pagina: las celdas vacias son vacias porque el proveedor no publica el dato.</p>
+    </div>
+    <div class="fuentes">
+      <div class="fuente">
+        <b>Twilio · US$ 0,0746/min (Programmable Voice) y US$ 7,00 por el numero</b>
+        <span>Pricing API consultada con las credenciales de la cuenta.</span>
+        <a href="https://pricing.twilio.com/v1/Voice/Countries/CL" target="_blank" rel="noopener">pricing.twilio.com/v1/Voice/Countries/CL</a>
+        <a href="https://pricing.twilio.com/v1/PhoneNumbers/Countries/CL" target="_blank" rel="noopener">pricing.twilio.com/v1/PhoneNumbers/Countries/CL</a>
+      </div>
+      <div class="fuente">
+        <b>Twilio · US$ 0,0706/min por SIP trunk</b>
+        <span>"Trunking Outbound Minute - Chile - Mobile", de la Pricing API de trunking de tu
+        cuenta. Es el precio que aplicaria al entrar por SIP.</span>
+        <a href="https://pricing.twilio.com/v2/Trunking/Countries/CL" target="_blank" rel="noopener">pricing.twilio.com/v2/Trunking/Countries/CL</a>
+      </div>
+      <div class="fuente">
+        <b>Plivo · US$ 0,0730/min a movil chileno</b>
+        <span>Tarifario publico de voz para Chile.</span>
+        <a href="https://www.plivo.com/voice/pricing/cl/" target="_blank" rel="noopener">plivo.com/voice/pricing/cl</a>
+      </div>
+      <div class="fuente">
+        <b>Plivo · intervalo 1/1 en SIP Trunking</b>
+        <span>Cita textual: "Billing interval for the US and Canada is 6/6, Brazil is 30/30 and for
+        all major international destinations is 1/1. Some international destinations may be at
+        60/60." Su Voice API, en cambio, documenta 60/60.</span>
+        <a href="https://www.plivo.com/sip-trunking/pricing/" target="_blank" rel="noopener">plivo.com/sip-trunking/pricing</a>
+        <a href="https://support.plivo.com/hc/en-us/articles/360041863771-How-will-I-be-charged-for-calls" target="_blank" rel="noopener">support.plivo.com — How will I be charged for calls</a>
+      </div>
+      <div class="fuente">
+        <b>Plivo · paises con numeracion disponible</b>
+        <span>Su documentacion lista 12 paises: Estados Unidos e India en pago por uso, y otros diez
+        solo con plan Enterprise (minimo US$ 1.000/mes). Chile no figura. El bloqueo de registro
+        desde Chile lo comprobo el operador a mano el 14-sep-2026.</span>
+        <a href="https://www.plivo.com/docs/numbers" target="_blank" rel="noopener">plivo.com/docs/numbers</a>
+      </div>
+      <div class="fuente">
+        <b>Telnyx · US$ 7,25 por el numero chileno</b>
+        <span>"Local numbers for Chile start at $7.25 per month", en su pagina de numeros de Chile.
+        La tarifa por minuto a Chile no aparece en ninguna pagina publica ni en su API.</span>
+        <a href="https://telnyx.com/phone-numbers/chile" target="_blank" rel="noopener">telnyx.com/phone-numbers/chile</a>
+        <a href="https://telnyx.com/pricing/elastic-sip" target="_blank" rel="noopener">telnyx.com/pricing/elastic-sip</a>
+      </div>
+      <div class="fuente">
+        <b>Telnyx · tarifario de componentes y motor de voz</b>
+        <span>Voice API US$ 0,002/min, SIP saliente desde US$ 0,005, entrante desde US$ 0,0032,
+        grabacion US$ 0,002, streaming US$ 0,0035, numero local EE.UU. US$ 1,00/mes. Motor de voz
+        US$ 0,05/min con LLM aparte (~US$ 0,004/min). Planes: pago por uso sin minimo, Committed
+        US$ 500/mes, Enterprise US$ 5.000/mes.</span>
+        <a href="https://telnyx.com/pricing/voice-ai-agents" target="_blank" rel="noopener">telnyx.com/pricing/voice-ai-agents</a>
+      </div>
+      <div class="fuente">
+        <b>Netexplora · servicio no verificable</b>
+        <span>La URL del servicio responde 404 y el sitio no menciona telefonia. La descripcion del
+        SIP Trunking Flex proviene del indice de busqueda, no de la pagina viva.</span>
+        <a href="https://www.netexplora.com/cl/servicios/sip-trunking/" target="_blank" rel="noopener">netexplora.com/cl/servicios/sip-trunking (404)</a>
+      </div>
+      <div class="fuente">
+        <b>ElevenLabs · SIP trunking, proveedores y limitaciones</b>
+        <span>Requisitos de codecs, autenticacion y transporte; llamadas salientes soportadas;
+        grabacion y deteccion de contestador "ignoradas para proveedores que no son Twilio".</span>
+        <a href="https://elevenlabs.io/docs/agents-platform/phone-numbers/sip-trunking" target="_blank" rel="noopener">elevenlabs.io/docs — SIP trunking</a>
+        <a href="https://elevenlabs.io/docs/eleven-agents/phone-numbers/telephony/telnyx" target="_blank" rel="noopener">elevenlabs.io/docs — Telnyx SIP trunking</a>
+        <a href="https://elevenlabs.io/docs/api-reference/sip-trunk/outbound-call" target="_blank" rel="noopener">elevenlabs.io/docs — sip-trunk/outbound-call</a>
+      </div>
+      <div class="fuente">
+        <b>438 lineas de reconciliacion</b>
+        <span>Contadas en el repo el 14-sep-2026: <code>twilio-calls-client.ts</code> (192) +
+        <code>dialing-reconciler.ts</code> (246).</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Precios consultados el 14-sep-2026. Twilio verificado contra la cuenta real; el numero de Telnyx
+    sale de su pagina publica; la tarifa de Telnyx a Chile y todo lo de Netexplora requieren
+    cotizacion. Plivo queda descartado por disponibilidad, no por precio. El costo de migrar se trata
+    como costo hundido y no entra en ninguna cifra.
+  </footer>
+</div>
+
+<script>
+  (function () {
+    "use strict";
+
+    // Valores verificados. Los null son los que ningun proveedor publica.
+    var P = {
+      twilio:    { min: 0.0746, num: 7.00, fact: 60, color: "var(--twilio)" },
+      twiliosip: { min: 0.0706, num: 7.00, fact: 60, color: "var(--twilio)" },
+      plivo:     { min: 0.0730, num: null, fact: 1,  color: "var(--plivo)" },
+      telnyx:    { min: null,   num: 7.25, fact: 60, color: "var(--telnyx)" },
+      netex:     { min: null,   num: null, fact: 60, color: "var(--netex)" }
+    };
+    var ORDEN = ["twilio", "twiliosip", "plivo", "telnyx", "netex"];
+
+    var $ = function (id) { return document.getElementById(id); };
+    var usd = function (v, d) {
+      if (d === undefined) d = 2;
+      return "US$ " + v.toLocaleString("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
+    };
+    var clp = function (v) { return "$" + Math.round(v).toLocaleString("es-CL") + " CLP"; };
+
+    /** Lee un input opcional: vacio = dato que el proveedor no publica. */
+    function opt(id) {
+      var el = $(id);
+      if (!el) return null;
+      var v = el.value.trim();
+      el.classList.toggle("vacio", v === "");
+      if (v === "") return null;
+      var n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    }
+
+    /** Minutos facturados del mes segun el intervalo: 60 redondea al minuto, 1 cobra el segundo. */
+    function minutosFacturados(seg, llamadas, intervalo) {
+      return intervalo === 1 ? (seg / 60) * llamadas : Math.ceil(seg / 60) * llamadas;
+    }
+
+    function calcular() {
+      var llamadas = Math.max(1, Number($("llamadas").value) || 1);
+      var seg = Number($("dur").value);
+      var tasaClp = Number($("clp").value) || 0;
+      $("dur-val").textContent = seg;
+
+      // Lo que el redondeo hace pagar de mas, en segundos por llamada.
+      var aire = Math.ceil(seg / 60) * 60 - seg;
+      $("hint-aire").textContent = aire > 0
+        ? "Con 60/60 pagas " + aire + " s de aire por llamada"
+        : "Duracion exacta: el redondeo no cobra de mas";
+
+      // Estado actual de cada proveedor, con lo que el usuario haya escrito.
+      P.plivo.num = opt("num-plivo");
+      P.plivo.fact = Number($("fact-plivo").value);
+      P.telnyx.min = opt("min-telnyx");
+      P.netex.min = opt("min-netex");
+      P.netex.num = opt("num-netex");
+      P.netex.fact = Number($("fact-netex").value);
+
+      var base = P.twilio.min * minutosFacturados(seg, llamadas, 60) + P.twilio.num;
+      $("v-hoy").textContent = usd(base);
+      $("v-sip").textContent = usd(P.twiliosip.min * minutosFacturados(seg, llamadas, 60) + P.twiliosip.num);
+      $("v-mejor").textContent =
+        usd(P.plivo.min * minutosFacturados(seg, llamadas, 1)) + (P.plivo.num === null ? "" : "");
+
+      // Escala comun de las barras.
+      var maxTotal = base;
+      ORDEN.forEach(function (k) {
+        var p = P[k];
+        if (p.min === null) return;
+        var t = p.min * minutosFacturados(seg, llamadas, p.fact) + (p.num === null ? 0 : p.num);
+        if (t > maxTotal) maxTotal = t;
+      });
+
+      ORDEN.forEach(function (k) {
+        var p = P[k];
+        var celdaTot = $("tot-" + k);
+        var celdaDelta = $("delta-" + k);
+        var barra = $("bar-" + k);
+
+        if (p.min === null) {
+          if (celdaTot) celdaTot.innerHTML = '<span class="sin-dato">sin cotizar</span>';
+          if (celdaDelta) celdaDelta.innerHTML = '<span class="sin-dato">—</span>';
+          barra.innerHTML = '<div class="barra-seg--vacio" style="width:38%">' +
+            '<span class="barra-val"><small>falta la tarifa por minuto</small></span></div>';
+          return;
+        }
+
+        var costoMin = p.min * minutosFacturados(seg, llamadas, p.fact);
+        var completo = p.num !== null;
+        var costoNum = completo ? p.num : 0;
+        var total = costoMin + costoNum;
+
+        if (celdaTot) {
+          celdaTot.innerHTML = completo ? usd(total) : usd(total) + ' <span class="sin-dato">+ numero</span>';
+        }
+        if (celdaDelta) {
+          var dif = total - base;
+          var clase = dif < 0 ? "delta-buena" : "delta-mala";
+          var signo = dif < 0 ? "−" : "+";
+          var pct = base > 0 ? Math.round(Math.abs(dif) / base * 100) : 0;
+          celdaDelta.innerHTML = '<span class="' + clase + '">' + signo + usd(Math.abs(dif)) +
+            "</span> <span class=\"sin-dato\">" + (completo ? signo + pct + "%" : "solo minutos") + "</span>";
+        }
+
+        var html = '<div class="barra-seg" style="width:' + (costoMin / maxTotal * 100) +
+          '%; background:' + p.color + '"></div>';
+        if (costoNum > 0) {
+          html += '<div class="barra-seg barra-seg--num" style="width:' + (costoNum / maxTotal * 100) +
+            '%; background:' + p.color + '"></div>';
+        } else if (!completo) {
+          html += '<div class="barra-seg--vacio" style="width:9%"></div>';
+        }
+        html += '<span class="barra-val">' + usd(total) + (completo ? "" : " <small>+ numero</small>") + "</span>";
+        barra.innerHTML = html;
+      });
+
+      // Cuanto vale facturar por segundo, a igual tarifa.
+      var con6060 = P.plivo.min * minutosFacturados(seg, llamadas, 60);
+      var con11 = P.plivo.min * minutosFacturados(seg, llamadas, 1);
+      $("ahorro-1-1").textContent = con6060 > 0 ? Math.round((1 - con11 / con6060) * 100) + "%" : "0%";
+
+      // Costo por contacto logrado.
+      var tasaA = Number($("tasa-a").value) / 100;
+      var tasaB = Number($("tasa-b").value) / 100;
+      $("tasa-a-val").textContent = Math.round(tasaA * 100);
+      $("tasa-b-val").textContent = Math.round(tasaB * 100);
+
+      var porContactoA = base / (llamadas * tasaA);
+      var porContactoB = base / (llamadas * tasaB);
+      var mejora = ((porContactoA - porContactoB) / porContactoA) * 100;
+      var extra = Math.round(llamadas * (tasaB - tasaA));
+
+      var alerta = $("contacto-alert");
+      alerta.className = "alert " + (mejora > 0 ? "alert--ok" : "alert--warn");
+      alerta.firstElementChild.textContent = mejora > 0 ? "→" : "⚠";
+      $("contacto-msg").innerHTML = mejora > 0
+        ? "Con el mismo gasto de <b>" + usd(base) + "</b> al mes (" + clp(base * tasaClp) + "), pasar de " +
+          Math.round(tasaA * 100) + "% a " + Math.round(tasaB * 100) + "% de contestacion baja el costo " +
+          "por contacto logrado de <b>" + usd(porContactoA, 3) + "</b> a <b>" + usd(porContactoB, 3) +
+          "</b>: un <b>" + Math.round(mejora) + "% menos</b>, y " + extra + " personas mas contactadas " +
+          "al mes. El mejor cambio de tarifa de esta pagina ahorra un 5%."
+        : "Con esas tasas el numero chileno no mejora nada: el costo por contacto logrado seria " +
+          usd(porContactoB, 3) + " contra " + usd(porContactoA, 3) + ". Si no esperas que mas gente " +
+          "conteste, no hay caso para cambiarse.";
+
+      // Peso de la telefonia en una llamada (creditos de ElevenLabs, regimen actual).
+      var el = seg * 7.71 * 0.0002;
+      var tw = Math.ceil(seg / 60) * P.twilio.min;
+      $("pct-telefonia").textContent = Math.round(tw / (tw + el) * 100) + "%";
+
+      // --- Capa de IA: ElevenLabs contra el motor de voz de Telnyx ---
+      // ElevenLabs se paga por segundo hablado (creditos), no por minuto redondeado.
+      var EL_POR_MIN = 7.71 * 60 * 0.0002;   // 7,71 creditos/s al precio de tu paquete
+      var TX_POR_MIN = 0.05 + 0.004;         // motor de voz + LLM en GPU de Telnyx
+      var minutosHablados = (seg / 60) * llamadas;
+      var elMes = EL_POR_MIN * minutosHablados;
+      var txMes = TX_POR_MIN * minutosHablados;
+
+      $("col-mes").textContent = "Al mes, " + llamadas + " llamadas de " + seg + " s";
+      $("ia-el-min").textContent = usd(EL_POR_MIN, 4);
+      $("ia-tx-min").textContent = usd(TX_POR_MIN, 4);
+      $("ia-el-mes").textContent = usd(elMes);
+      $("ia-tx-mes").textContent = usd(txMes);
+      var difPct = Math.round((1 - TX_POR_MIN / EL_POR_MIN) * 100);
+      $("ia-dif-min").innerHTML = '<span class="delta-buena">−' + difPct + "%</span>";
+      $("ia-dif-mes").innerHTML = '<span class="delta-buena">−' + usd(elMes - txMes) + "</span>";
+      $("ia-escala").innerHTML =
+        "A este volumen la diferencia son <b>" + usd(elMes - txMes) + "</b> al mes (" +
+        clp((elMes - txMes) * tasaClp) + "). La cifra cambia de naturaleza con el volumen: a 10.000 " +
+        "minutos hablados al mes serian <b>" + usd((EL_POR_MIN - TX_POR_MIN) * 10000, 0) +
+        "</b> de diferencia. Es la palanca que importa si el piloto escala, no hoy.";
+    }
+
+    ["llamadas", "dur", "clp", "num-plivo", "fact-plivo", "min-telnyx",
+     "min-netex", "num-netex", "fact-netex", "tasa-a", "tasa-b"].forEach(function (id) {
+      var el = $(id);
+      el.addEventListener("input", calcular);
+      if (el.tagName === "SELECT") el.addEventListener("change", calcular);
+    });
+
+    calcular();
+  })();
+</script>

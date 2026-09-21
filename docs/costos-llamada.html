@@ -1,0 +1,1336 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Costo por llamada Umine Voice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    color-scheme: light;
+    --ground: #eceff3;
+    --surface: #fcfdfe;
+    --surface-2: #f4f6f9;
+    --line: #d8dee6;
+    --line-soft: #e6eaf0;
+    --ink: #111820;
+    --ink-2: #4e5b6b;
+    --ink-3: #78869a;
+    --eleven: #eb6834;
+    --llm: #1baf7a;
+    --twilio: #2a78d6;
+    --critico: #b23a2b;
+    --ok: #1a7f52;
+    --shadow: 0 1px 2px rgba(17, 24, 32, 0.06), 0 8px 24px -16px rgba(17, 24, 32, 0.3);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --ground: #0e1218;
+      --surface: #171d25;
+      --surface-2: #1e252f;
+      --line: #2e3844;
+      --line-soft: #242d38;
+      --ink: #eef2f6;
+      --ink-2: #a8b4c2;
+      --ink-3: #7d8b9c;
+      --eleven: #d95926;
+      --llm: #199e70;
+      --twilio: #3987e5;
+      --critico: #e06a5a;
+      --ok: #3da97a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0e1218;
+    --surface: #171d25;
+    --surface-2: #1e252f;
+    --line: #2e3844;
+    --line-soft: #242d38;
+    --ink: #eef2f6;
+    --ink-2: #a8b4c2;
+    --ink-3: #7d8b9c;
+    --eleven: #d95926;
+    --llm: #199e70;
+    --twilio: #3987e5;
+    --critico: #e06a5a;
+    --ok: #3da97a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 40px 72px;
+    display: flex;
+    flex-direction: column;
+    gap: 34px;
+  }
+
+  h1, h2, h3 { font-family: Archivo, "IBM Plex Sans", system-ui, sans-serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 700; letter-spacing: -0.025em; line-height: 1.05; }
+  h2 { font-size: 1.28rem; font-weight: 600; letter-spacing: -0.01em; }
+  h3 { font-size: 0.95rem; font-weight: 600; }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--ink-3);
+  }
+
+  .lede { color: var(--ink-2); max-width: 66ch; font-size: 1.02rem; }
+  .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  header.masthead { display: flex; flex-direction: column; gap: 14px; }
+  .masthead-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+
+  /* ---------- cifras principales ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: var(--shadow);
+  }
+  .tile--hero { border-color: var(--ink); border-width: 1.5px; }
+  .tile-label { font-size: 0.78rem; color: var(--ink-2); font-weight: 500; }
+  .tile-value { font-family: Archivo, sans-serif; font-variant-numeric: tabular-nums; font-size: clamp(1.9rem, 4.4vw, 2.6rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+  .tile-sub { font-size: 0.79rem; color: var(--ink-3); }
+  .tile-clp { font-family: "IBM Plex Mono", monospace; font-size: 0.86rem; color: var(--ink-2); }
+  .tile-delta { font-size: 0.78rem; font-weight: 600; font-family: "IBM Plex Mono", monospace; color: var(--ok); }
+
+  /* ---------- paneles ---------- */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .panel-head { display: flex; flex-direction: column; gap: 4px; }
+  .panel-note { font-size: 0.85rem; color: var(--ink-2); max-width: 72ch; }
+
+  /* ---------- controles ---------- */
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px 22px; }
+  .ctrl { display: flex; flex-direction: column; gap: 7px; }
+  .ctrl > label, .ctrl > span.lbl {
+    font-size: 0.74rem; font-weight: 600; color: var(--ink-2);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .ctrl-row { display: flex; align-items: baseline; gap: 8px; }
+  .ctrl-val { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; font-size: 1.05rem; font-weight: 600; }
+  .ctrl-unit { font-size: 0.78rem; color: var(--ink-3); }
+  .ctrl-hint { font-size: 0.74rem; color: var(--ink-3); }
+  input[type="range"] { width: 100%; accent-color: var(--twilio); }
+  input[type="number"] {
+    width: 100%; padding: 7px 9px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+    font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; font-size: 0.92rem;
+  }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--twilio); outline-offset: 2px; }
+
+  .segmented { display: flex; flex-wrap: wrap; gap: 6px; }
+  .segmented button {
+    font: inherit; font-size: 0.82rem; padding: 6px 11px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2);
+    border-radius: 7px; transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .segmented button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: 600; }
+  .segmented button:hover:not([aria-pressed="true"]) { border-color: var(--ink-3); color: var(--ink); }
+
+  .check { display: flex; gap: 9px; align-items: flex-start; font-size: 0.85rem; color: var(--ink-2); cursor: pointer; }
+  .check input { margin-top: 3px; accent-color: var(--twilio); }
+
+  /* ---------- barra de composicion ---------- */
+  .stack { display: flex; gap: 2px; height: 46px; width: 100%; }
+  .stack-seg { border-radius: 3px; display: flex; align-items: center; padding-inline: 9px; min-width: 3px; transition: width 0.25s ease; overflow: hidden; }
+  .stack-seg span { font-family: "IBM Plex Mono", monospace; font-size: 0.78rem; font-weight: 600; color: #fff; white-space: nowrap; }
+  .stack-seg--voz { background: var(--eleven); }
+  .stack-seg--llm { background: var(--llm); }
+  .stack-seg--tw { background: var(--twilio); }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.83rem; color: var(--ink-2); }
+  .legend-item { display: flex; align-items: center; gap: 7px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  /* ---------- tablas ---------- */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--ink-3); font-weight: 600; border-bottom: 1px solid var(--line);
+  }
+  tbody td { font-variant-numeric: tabular-nums; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", monospace; }
+  tr.total td { border-top: 1.5px solid var(--ink); border-bottom: none; font-weight: 600; padding-top: 10px; }
+  tr.subtotal td { border-bottom: 1px solid var(--line); font-weight: 600; }
+  .fuentes { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px 24px; }
+  .fuente { display: flex; flex-direction: column; gap: 3px; font-size: 0.82rem; }
+  .fuente b { font-weight: 600; color: var(--ink); font-size: 0.85rem; }
+  .fuente span { color: var(--ink-2); }
+  .fuente a {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.75rem; color: var(--twilio);
+    text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--twilio) 35%, transparent);
+    word-break: break-all; align-self: flex-start;
+  }
+  .fuente a:hover { border-bottom-color: var(--twilio); }
+  .fuente code { font-size: 0.75rem; }
+  tbody tr:last-child td { border-bottom: none; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+
+  /* ---------- graficos ---------- */
+  figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  figcaption { font-size: 0.82rem; color: var(--ink-2); }
+  .chart-box { position: relative; }
+  svg { display: block; width: 100%; height: auto; max-width: 100%; overflow: visible; }
+  .tip {
+    position: absolute; pointer-events: none; opacity: 0; transform: translate(-50%, -100%);
+    background: var(--ink); color: var(--surface); padding: 7px 10px; border-radius: 7px;
+    font-family: "IBM Plex Mono", monospace; font-size: 0.74rem; line-height: 1.45;
+    white-space: nowrap; transition: opacity 0.1s; z-index: 5;
+  }
+  .axis-lbl { font-family: "IBM Plex Mono", monospace; font-size: 10px; fill: var(--ink-3); }
+  .gridline { stroke: var(--line-soft); stroke-width: 1; }
+  .marker-line { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; }
+  .marker-text { font-family: "IBM Plex Mono", monospace; font-size: 10px; font-weight: 600; fill: var(--ink-2); }
+
+  /* ---------- avisos ---------- */
+  .alert {
+    display: flex; gap: 12px; padding: 13px 16px; border-radius: 9px;
+    font-size: 0.87rem; border: 1px solid; align-items: flex-start;
+  }
+  .alert--warn { background: color-mix(in srgb, var(--critico) 9%, var(--surface)); border-color: color-mix(in srgb, var(--critico) 40%, var(--surface)); color: var(--ink); }
+  .alert--ok { background: color-mix(in srgb, var(--ok) 9%, var(--surface)); border-color: color-mix(in srgb, var(--ok) 35%, var(--surface)); color: var(--ink); }
+  .alert b { font-weight: 600; }
+
+  .notes { display: flex; flex-direction: column; gap: 12px; font-size: 0.87rem; color: var(--ink-2); }
+  .notes h3 { color: var(--ink); }
+  .notes ul { margin: 0; padding-left: 19px; display: flex; flex-direction: column; gap: 7px; }
+  .notes li::marker { color: var(--ink-3); }
+  code { font-family: "IBM Plex Mono", monospace; font-size: 0.88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line-soft); }
+
+  details summary { cursor: pointer; font-size: 0.85rem; color: var(--ink-2); font-weight: 500; }
+  details summary:hover { color: var(--ink); }
+  details[open] summary { margin-bottom: 12px; }
+
+  footer { font-size: 0.79rem; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 18px; }
+
+  @media (max-width: 720px) {
+    .tiles { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Umine Voice · Agente SENCE</p>
+    <h1>Costo por llamada</h1>
+    <p class="lede">
+      Lo que cuesta un minuto de voz, una llamada completa y una pasada por todas las OCs que hoy
+      ameritan llamada. Dos cosas cambiaron desde la primera version: el agente corrio a un LLM
+      propio de ElevenLabs (<span class="num">qwen36-35b-a3b</span>) y el saludo ahora dice el
+      pendiente y el plazo de entrada, asi que las llamadas se acortaron. Las tarifas se releyeron
+      contra las APIs de las dos cuentas; los promedios salen de las seis llamadas reales que ya
+      corrieron con el agente nuevo.
+    </p>
+    <div class="masthead-meta">
+      <span class="eyebrow">Datos leidos el 21-sep-2026</span>
+      <span class="eyebrow">37 conversaciones en la cuenta</span>
+      <span class="eyebrow">83 OCs llamables hoy</span>
+    </div>
+  </header>
+
+  <!-- =================== CIFRAS =================== -->
+  <section class="tiles" aria-label="Cifras principales">
+    <div class="tile tile--hero">
+      <p class="tile-label">Costo por llamada</p>
+      <p class="tile-value num" id="k-call">US$ 0,118</p>
+      <p class="tile-clp num" id="k-call-clp">≈ $113 CLP</p>
+      <p class="tile-delta" id="k-call-delta">−57% vs. la version anterior</p>
+      <p class="tile-sub"><span id="k-dur">30</span> s de conversacion</p>
+    </div>
+    <div class="tile">
+      <p class="tile-label">Costo por minuto de voz</p>
+      <p class="tile-value num" id="k-min">US$ 0,161</p>
+      <p class="tile-clp num" id="k-min-clp">≈ $155 CLP</p>
+      <p class="tile-delta" id="k-min-delta">−3,8% vs. la version anterior</p>
+      <p class="tile-sub">Tarifa pura, sin el redondeo de Twilio</p>
+    </div>
+    <div class="tile">
+      <p class="tile-label">Llamar a todas las criticas</p>
+      <p class="tile-value num" id="k-pass">US$ 9,77</p>
+      <p class="tile-clp num" id="k-pass-clp">≈ $9.393 CLP</p>
+      <p class="tile-sub"><span id="k-calls">83</span> OCs, una llamada cada una, todas contestan</p>
+      <p class="tile-sub">Costo variable: no incluye el arriendo del numero</p>
+    </div>
+  </section>
+
+  <!-- =================== SUPUESTOS =================== -->
+  <section class="panel" aria-label="Supuestos del calculo">
+    <div class="panel-head">
+      <h2>Los supuestos</h2>
+      <p class="panel-note">
+        Vienen cargados con lo que muestran tus datos de hoy. Cambia cualquiera y las tres cifras
+        de arriba, la tabla, la pasada del mes y los dos graficos se mueven con el.
+      </p>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl">
+        <label for="dur">Duracion de la llamada</label>
+        <div class="ctrl-row">
+          <span class="ctrl-val" id="dur-out">30</span><span class="ctrl-unit">segundos</span>
+        </div>
+        <input type="range" id="dur" min="5" max="180" step="1" value="30">
+        <span class="ctrl-hint">Las 6 llamadas del agente nuevo promedian 36 s (mediana 38 s)</span>
+      </div>
+
+      <div class="ctrl">
+        <span class="lbl">Consumo del LLM</span>
+        <div class="segmented" id="llm-presets" role="group" aria-label="Modelo de lenguaje">
+          <button type="button" data-llm="0.5115" aria-pressed="true">qwen36 · 0,51 cr/s</button>
+          <button type="button" data-llm="1.0517" aria-pressed="false">gemini · 1,05 cr/s</button>
+        </div>
+        <input type="number" id="llm-rate" min="0" max="5" step="0.0001" value="0.5115">
+        <span class="ctrl-hint">Creditos de LLM por segundo de conversacion</span>
+      </div>
+
+      <div class="ctrl">
+        <label for="voz-rate">Voz de ElevenLabs</label>
+        <div class="ctrl-row">
+          <input type="number" id="voz-rate" min="1" max="2000" step="1" value="400">
+          <span class="ctrl-unit">cr / min</span>
+        </div>
+        <span class="ctrl-hint">400 cr/min = US$ 0,08/min, medido en tus llamadas</span>
+      </div>
+
+      <div class="ctrl">
+        <span class="lbl">Tu plan de ElevenLabs</span>
+        <div class="ctrl-row">
+          <span class="ctrl-unit">US$</span>
+          <input type="number" id="pack-usd" min="0" step="0.5" value="6">
+          <span class="ctrl-unit">por</span>
+          <input type="number" id="pack-credits" min="1" step="1000" value="30000">
+        </div>
+        <span class="ctrl-hint" id="unit-credit">US$ 0,000200 por credito</span>
+      </div>
+
+      <div class="ctrl">
+        <label for="twilio-rate">Tarifa de Twilio</label>
+        <div class="ctrl-row">
+          <span class="ctrl-unit">US$</span>
+          <input type="number" id="twilio-rate" min="0" step="0.001" value="0.0746">
+          <span class="ctrl-unit">por minuto</span>
+        </div>
+        <span class="ctrl-hint">Movil chileno (+569), precio real de tu cuenta</span>
+      </div>
+
+      <div class="ctrl">
+        <span class="lbl">Llamadas de la pasada</span>
+        <div class="ctrl-row">
+          <input type="number" id="calls" min="1" step="1" value="83">
+          <span class="ctrl-unit">llamadas</span>
+        </div>
+        <div class="segmented" id="calls-presets" role="group" aria-label="Alcance de la pasada">
+          <button type="button" data-calls="66" aria-pressed="false">Solo A · 66</button>
+          <button type="button" data-calls="83" aria-pressed="true">A + B · 83</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label for="clp">Dolar observado</label>
+        <div class="ctrl-row">
+          <input type="number" id="clp" min="1" step="1" value="961.73">
+          <span class="ctrl-unit">CLP por US$</span>
+        </div>
+        <span class="ctrl-hint">21-sep-2026. Editable: ponle el valor del dia</span>
+      </div>
+
+      <div class="ctrl">
+        <label for="num-usd">Arriendo del numero</label>
+        <div class="ctrl-row">
+          <span class="ctrl-unit">US$</span>
+          <input type="number" id="num-usd" min="0" step="0.05" value="7">
+          <span class="ctrl-unit">al mes</span>
+        </div>
+        <div class="segmented" id="num-presets" role="group" aria-label="Numero telefonico">
+          <button type="button" data-num="7" aria-pressed="true">Chileno +56</button>
+          <button type="button" data-num="1.15" aria-pressed="false">El actual +1</button>
+        </div>
+      </div>
+    </div>
+
+    <label class="check">
+      <input type="checkbox" id="redondeo" checked>
+      <span>
+        <b>Twilio cobra el minuto completo.</b> La voz se factura en bloques de 60 s redondeando
+        hacia arriba, asi que una llamada de 30 s paga 1 minuto igual que una de 59 s. Desmarcalo
+        para ver el costo a segundo exacto.
+      </span>
+    </label>
+  </section>
+
+  <!-- =================== DESGLOSE =================== -->
+  <section class="panel" aria-label="Desglose del costo">
+    <div class="panel-head">
+      <h2>De donde sale cada peso</h2>
+      <p class="panel-note">
+        Tres lineas cobran, no dos: ElevenLabs factura la voz y el LLM por separado, y Twilio la
+        telefonia. Es la separacion que importa ahora, porque el cambio de modelo solo toca una de
+        las tres.
+      </p>
+    </div>
+
+    <div class="stack" id="stack" role="img" aria-labelledby="stack-desc">
+      <div class="stack-seg stack-seg--voz" id="seg-voz"><span id="seg-voz-t">34%</span></div>
+      <div class="stack-seg stack-seg--llm" id="seg-llm"><span id="seg-llm-t"></span></div>
+      <div class="stack-seg stack-seg--tw" id="seg-tw"><span id="seg-tw-t">63%</span></div>
+    </div>
+    <p id="stack-desc" class="panel-note">
+      Composicion del costo de una llamada: <span id="stack-desc-txt">voz 34%, LLM 2,6%, telefonia 63%</span>.
+    </p>
+    <div class="legend">
+      <span class="legend-item"><i class="swatch" style="background:var(--eleven)"></i> ElevenLabs — voz (TTS + ASR + plataforma)</span>
+      <span class="legend-item"><i class="swatch" style="background:var(--llm)"></i> ElevenLabs — LLM</span>
+      <span class="legend-item"><i class="swatch" style="background:var(--twilio)"></i> Twilio — minutos de telefonia</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Concepto</th><th>Cantidad</th><th>Por llamada</th><th>Por minuto</th>
+            <th>CLP / llamada</th><th>% del total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><i class="dot" style="background:var(--eleven)"></i>ElevenLabs · voz</td>
+            <td class="mono" id="r-voz-q">200 creditos</td>
+            <td class="mono" id="r-voz-call">US$ 0,0400</td>
+            <td class="mono" id="r-voz-min">US$ 0,0800</td>
+            <td class="mono" id="r-voz-clp">$38</td>
+            <td class="mono" id="r-voz-pct">34%</td>
+          </tr>
+          <tr>
+            <td><i class="dot" style="background:var(--llm)"></i>ElevenLabs · LLM</td>
+            <td class="mono" id="r-llm-q">15 creditos</td>
+            <td class="mono" id="r-llm-call">US$ 0,0031</td>
+            <td class="mono" id="r-llm-min">US$ 0,0061</td>
+            <td class="mono" id="r-llm-clp">$3</td>
+            <td class="mono" id="r-llm-pct">2,6%</td>
+          </tr>
+          <tr>
+            <td><i class="dot" style="background:var(--twilio)"></i>Twilio</td>
+            <td class="mono" id="r-tw-q">1 min facturado</td>
+            <td class="mono" id="r-tw-call">US$ 0,0746</td>
+            <td class="mono" id="r-tw-min">US$ 0,0746</td>
+            <td class="mono" id="r-tw-clp">$72</td>
+            <td class="mono" id="r-tw-pct">63%</td>
+          </tr>
+          <tr class="total">
+            <td>Total</td>
+            <td class="mono" id="r-tot-q">30 s</td>
+            <td class="mono" id="r-tot-call">US$ 0,1177</td>
+            <td class="mono" id="r-tot-min">US$ 0,1607</td>
+            <td class="mono" id="r-tot-clp">$113</td>
+            <td class="mono">100%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="panel-note" id="nota-redondeo">
+      Con el redondeo de Twilio, el minuto efectivo de una llamada de 30 s sale US$ 0,235 — 1,46
+      veces la tarifa pura, porque pagas 60 s de telefonia por 30 s de conversacion. Cuanto mas
+      corta la llamada, mas pesa ese redondeo.
+    </p>
+  </section>
+
+  <!-- =================== CURVA DE DURACION =================== -->
+  <section class="panel" aria-label="Costo segun la duracion">
+    <div class="panel-head">
+      <h2>La duracion es la palanca, y tiene escalones</h2>
+      <p class="panel-note">
+        ElevenLabs cobra al segundo: sus dos lineas suben en diagonal. Twilio cobra el minuto
+        completo: su linea sube en escalones de 60 s. Por eso el costo por llamada no baja parejo
+        — entre 1 y 60 segundos pagas exactamente la misma telefonia, y pasar de 60 a 61 segundos
+        cuesta un minuto entero mas.
+      </p>
+    </div>
+    <figure>
+      <div class="chart-box">
+        <svg id="curva" viewBox="0 0 720 320" role="img"
+             aria-label="Costo por llamada segun la duracion, con las tres lineas apiladas"></svg>
+        <div class="tip" id="tip-curva"></div>
+      </div>
+      <figcaption>
+        Costo por llamada segun cuanto dure. Pasa el cursor para ver el desglose en cada segundo.
+      </figcaption>
+    </figure>
+    <div class="legend">
+      <span class="legend-item"><i class="swatch" style="background:var(--eleven)"></i> ElevenLabs — voz</span>
+      <span class="legend-item"><i class="swatch" style="background:var(--llm)"></i> ElevenLabs — LLM</span>
+      <span class="legend-item"><i class="swatch" style="background:var(--twilio)"></i> Twilio — telefonia</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Duracion</th><th>ElevenLabs voz</th><th>ElevenLabs LLM</th><th>Twilio</th><th>Total</th><th>Total CLP</th><th>Por minuto efectivo</th></tr>
+        </thead>
+        <tbody id="tabla-curva"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- =================== QUE CAMBIO =================== -->
+  <section class="panel" aria-label="Que cambio desde la version anterior">
+    <div class="panel-head">
+      <h2>Que cambio, y cuanto aporto cada cambio</h2>
+      <p class="panel-note">
+        Los dos cambios empujan en la misma direccion, pero no en la misma escala. Partiendo de la
+        llamada de la version anterior (80 s con <span class="num">gemini-3.7-flash</span>,
+        US$ 0,2727) y llegando a la de hoy (30 s con <span class="num">qwen36-35b-a3b</span>,
+        US$ 0,1177), asi se reparte el ahorro:
+      </p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Escenario</th><th>Modelo</th><th>Duracion</th><th>Creditos</th><th>ElevenLabs</th><th>Twilio</th><th>Total</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Version anterior</td>
+            <td class="mono">gemini-3.7-flash</td><td class="mono">80 s</td><td class="mono">617</td>
+            <td class="mono">US$ 0,1235</td><td class="mono">US$ 0,1492</td><td class="mono">US$ 0,2727</td>
+          </tr>
+          <tr>
+            <td>Solo cambia el modelo</td>
+            <td class="mono">qwen36-35b-a3b</td><td class="mono">80 s</td><td class="mono">574</td>
+            <td class="mono">US$ 0,1148</td><td class="mono">US$ 0,1492</td><td class="mono">US$ 0,2640</td>
+          </tr>
+          <tr>
+            <td>Solo cambia la duracion</td>
+            <td class="mono">gemini-3.7-flash</td><td class="mono">30 s</td><td class="mono">232</td>
+            <td class="mono">US$ 0,0463</td><td class="mono">US$ 0,0746</td><td class="mono">US$ 0,1209</td>
+          </tr>
+          <tr class="total">
+            <td>Hoy</td>
+            <td class="mono">qwen36-35b-a3b</td><td class="mono">30 s</td><td class="mono">215</td>
+            <td class="mono">US$ 0,0431</td><td class="mono">US$ 0,0746</td><td class="mono">US$ 0,1177</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert--ok">
+      <span aria-hidden="true">→</span>
+      <span>
+        <b>El ahorro es de la duracion, no del modelo.</b> De los US$ 0,155 que bajo la llamada,
+        US$ 0,152 los pone acortarla de 80 a 30 segundos y US$ 0,003 los pone el modelo mas barato.
+        El modelo propio es la decision correcta —es mas barato y no se nota en la conversacion—
+        pero el LLM ya pesaba poco: era el 6% de la llamada de 80 s y hoy es el 3% de la de 30 s.
+        El otro 97% son voz y telefonia, y esas dos se pagan por tiempo al aire.
+      </span>
+    </div>
+
+    <h3>El modelo: precios reales de tu cuenta</h3>
+    <p class="panel-note">
+      No son precios de lista: salen del bloque <code>charging.llm_usage</code> de tus propias
+      conversaciones, dividiendo el precio cobrado por los tokens consumidos. El modelo nuevo es
+      <b>5,8 veces mas barato en tokens de entrada</b> y un tercio mas caro en los de salida — y
+      como una conversacion de voz manda el prompt completo en cada turno, la entrada es lo que
+      manda: entre 1.200 y 1.700 tokens por turno contra unas pocas decenas de salida.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Modelo</th><th>Entrada US$/1M</th><th>Salida US$/1M</th><th>Llamadas comparadas</th><th>Tokens entrada / turno</th><th>US$ / turno</th><th>Creditos / segundo</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><i class="dot" style="background:var(--llm)"></i>qwen36-35b-a3b <b>(actual)</b></td>
+            <td class="mono">0,13</td><td class="mono">5,00</td><td class="mono">6</td>
+            <td class="mono">1.515</td><td class="mono">0,00032</td><td class="mono">0,51</td>
+          </tr>
+          <tr>
+            <td class="mono"><i class="dot" style="background:var(--eleven)"></i>gemini-3.7-flash (anterior)</td>
+            <td class="mono">0,75</td><td class="mono">3,75</td><td class="mono">6</td>
+            <td class="mono">868</td><td class="mono">0,00095</td><td class="mono">1,05</td>
+          </tr>
+          <tr>
+            <td class="mono">qwen35-397b-a17b (una prueba suelta)</td>
+            <td class="mono">0,63</td><td class="mono">15,00</td><td class="mono">1</td>
+            <td class="mono">188</td><td class="mono">0,00026</td><td class="mono">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="panel-note">
+      Las dos primeras filas comparan las <b>seis</b> llamadas mas recientes de cada modelo, que
+      es lo unico comparable: los precios por millon de tokens se verificaron en las 24
+      conversaciones que declaran modelo y tokens, pero los tokens por turno dependen del prompt y el
+      prompt cambio. La tercera fila se probo una sola vez, en septiembre, cuando la cuenta todavia
+      convertia creditos a otra tasa — su costo por segundo no es comparable y por eso va vacio.
+    </p>
+    <p class="panel-note">
+      El prompt de hoy es un 75% mas largo por turno que el de la version anterior (1.515 contra
+      868 tokens de entrada) y aun asi el LLM sale a la mitad por segundo. Ese margen es lo que
+      compra el modelo propio: permite un prompt mas explicito —el que hace que el saludo diga
+      todo de entrada— sin que la cuenta lo note.
+    </p>
+
+    <figure>
+      <div class="chart-box">
+        <svg id="scatter" viewBox="0 0 720 320" role="img"
+             aria-label="Creditos de LLM consumidos contra duracion, en las llamadas reales de los dos modelos"></svg>
+        <div class="tip" id="tip-scatter"></div>
+      </div>
+      <figcaption>
+        Creditos de LLM contra duracion, una llamada real por punto. La pendiente de cada rayo es
+        el consumo por segundo: el modelo nuevo va por debajo en todo el rango.
+      </figcaption>
+    </figure>
+    <div class="legend">
+      <span class="legend-item"><i class="swatch" style="background:var(--llm)"></i> qwen36-35b-a3b · 0,51 cr/s</span>
+      <span class="legend-item"><i class="swatch" style="background:var(--eleven)"></i> gemini-3.7-flash · 1,05 cr/s</span>
+    </div>
+
+    <h3>La duracion: lo que ya midieron las llamadas nuevas</h3>
+    <p class="panel-note">
+      El saludo ahora entra directo con el pendiente y el plazo
+      (<code>Hola {{nombre_interlocutor}}, recuerda que {{resumen_seguimiento}}</code>), asi que la
+      conversacion no gasta turnos en presentarse ni en explicar por que llama. Las seis llamadas
+      que corrieron con ese agente promedian <b>36 s</b> (mediana 38 s, rango 10–59 s) contra
+      <b>64 s</b> de las seis anteriores comparables. Los 30 s de esta pagina son el supuesto que
+      pediste, algo mas exigente que lo medido: si prefieres la cifra que ya se observo, mueve el
+      control a 36.
+    </p>
+  </section>
+
+  <!-- =================== PASADA Y MES =================== -->
+  <section class="panel" aria-label="La pasada completa y el mes">
+    <div class="panel-head">
+      <h2>La pasada completa, y el mes</h2>
+      <p class="panel-note">
+        Todas las OCs que hoy ameritan llamada, una llamada por OC, todas contestan y conversan lo
+        que dura una llamada promedio. El Semaforo real trae hoy <b>66 criticas en seccion A</b>
+        (riesgo de conexion) y <b>17 criticas en seccion B</b> (declaraciones juradas); la seccion
+        C no llama nunca y hoy ademas esta vacia. A eso se le suma lo unico que se paga aunque no
+        llames a nadie: el arriendo del numero.
+      </p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Concepto</th><th>Total USD</th><th>Total CLP</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><i class="dot" style="background:var(--eleven)"></i>ElevenLabs · voz — <span id="p-voz-cr">16.600</span> creditos</td>
+            <td class="mono" id="p-voz-usd">US$ 3,32</td><td class="mono" id="p-voz-clp">$3.193</td>
+          </tr>
+          <tr>
+            <td><i class="dot" style="background:var(--llm)"></i>ElevenLabs · LLM — <span id="p-llm-cr">1.274</span> creditos</td>
+            <td class="mono" id="p-llm-usd">US$ 0,25</td><td class="mono" id="p-llm-clp">$245</td>
+          </tr>
+          <tr>
+            <td><i class="dot" style="background:var(--twilio)"></i>Twilio — <span id="p-tw-min">83</span> minutos facturados</td>
+            <td class="mono" id="p-tw-usd">US$ 6,19</td><td class="mono" id="p-tw-clp">$5.955</td>
+          </tr>
+          <tr class="subtotal">
+            <td><span id="p-n">83</span> llamadas — costo variable</td>
+            <td class="mono" id="p-var-usd">US$ 9,77</td><td class="mono" id="p-var-clp">$9.393</td>
+          </tr>
+          <tr>
+            <td>Numero telefonico, arriendo mensual</td>
+            <td class="mono" id="p-num-usd">US$ 7,00</td><td class="mono" id="p-num-clp">$6.732</td>
+          </tr>
+          <tr class="total">
+            <td>Total del mes</td>
+            <td class="mono" id="p-mes-usd">US$ 16,77</td><td class="mono" id="p-mes-clp">$16.125</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="panel-note" id="nota-prorrateo">
+      Con el numero prorrateado, cada llamada del mes sale US$ 0,202 en vez de US$ 0,118: el
+      arriendo pesa un 72% extra cuando se reparte entre 83 llamadas. Mientras menos llames, mas
+      caro sale cada llamada — es el unico costo que corre igual si no llamas a nadie.
+    </p>
+
+    <div class="alert" id="alerta-plan">
+      <span aria-hidden="true">✓</span>
+      <span id="alerta-plan-txt">
+        <b>Ahora la pasada cabe en el plan.</b> Una vuelta completa consume 17.874 creditos de los
+        30.000 que trae tu paquete: queda el 40% libre y alcanzaria para 139 llamadas de 30 s en el
+        mes. En la version anterior —80 s por llamada— la misma vuelta pedia 37.576 creditos y el
+        plan se agotaba antes de terminarla.
+      </span>
+    </div>
+  </section>
+
+  <!-- =================== EVIDENCIA =================== -->
+  <section class="panel" aria-label="Las llamadas reales">
+    <div class="panel-head">
+      <h2>La evidencia: las llamadas reales</h2>
+      <p class="panel-note">
+        Las seis del agente nuevo y las seis comparables del anterior — mismas condiciones de
+        cobro (desde el 3 de septiembre la cuenta convierte creditos a US$ 0,0002). Se excluyen las
+        de 0 y 1 segundo: no son llamadas, son fallas, y arrastraban el promedio hacia abajo.
+      </p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Fecha (UTC)</th><th>Modelo</th><th>Segundos</th><th>Turnos</th><th>Cr. voz</th><th>Cr. LLM</th><th>Cr. total</th><th>Cr/s</th><th>US$ LLM</th></tr>
+        </thead>
+        <tbody id="tabla-reales"></tbody>
+      </table>
+    </div>
+    <details>
+      <summary>Ver las 37 conversaciones de la cuenta, incluidas las descartadas</summary>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Fecha (UTC)</th><th>Modelo</th><th>Segundos</th><th>Turnos</th><th>Cr. voz</th><th>Cr. LLM</th><th>Cr. total</th><th>Estado</th><th>Cuenta</th></tr>
+          </thead>
+          <tbody id="tabla-todas"></tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <!-- =================== LETRA CHICA =================== -->
+  <section class="panel notes" aria-label="Supuestos y limitaciones">
+    <h3>Letra chica — lo que este calculo asume y lo que deja fuera</h3>
+    <ul>
+      <li>
+        <b>La tarifa de Twilio es real, el redondeo es un supuesto.</b> Los US$ 0,0746 por minuto a
+        movil chileno salen de la Pricing API con tus credenciales y <b>no cambiaron</b> desde la
+        medicion anterior. El campo <code>price</code> de tus llamadas sigue viniendo
+        <code>null</code> (Twilio lo llena despues, y en las 27 llamadas de la cuenta quedo vacio o
+        en cero), asi que el costo por llamada no se pudo contrastar contra una factura. Twilio
+        factura la voz en bloques de 60 s hacia arriba; si tu contrato dijera otra cosa, desmarca la
+        casilla.
+      </li>
+      <li>
+        <b>Acortar la llamada no baja el costo en la misma proporcion.</b> A 80 s la telefonia era
+        el 55% de la cuenta; a 30 s es el 63%, porque el redondeo al minuto no se achica con la
+        conversacion. Cortar de 80 a 30 s es un 63% menos de tiempo al aire, pero solo un 57% menos
+        de costo. Por debajo de 60 s todo lo que ahorres sale solo de ElevenLabs.
+      </li>
+      <li>
+        <b>Los creditos del plan y los minutos extra cuestan lo mismo.</b> El paquete de US$ 6 trae
+        30.000 creditos = 75 minutos de agente; el minuto adicional cuesta US$ 0,08, que es
+        exactamente 400 creditos a US$ 0,0002. Por eso la aritmetica de esta pagina no cambia si la
+        pasada cae dentro del plan o se pasa: lo que si cambia es que dentro del plan ya esta
+        pagado.
+      </li>
+      <li>
+        <b>El consumo de LLM se modela por segundo, pero en realidad lo mandan los turnos.</b> Cada
+        turno reenvia el prompt completo, asi que una llamada con muchas idas y vueltas cortas
+        gasta mas LLM que una con pocas respuestas largas, a igual duracion. Los 0,51 cr/s son el
+        promedio observado en las seis llamadas nuevas (rango real 0,18–0,80 cr/s); a 30 s la linea
+        del LLM son 3 centavos de dolar, asi que el error que introduce esta simplificacion no
+        mueve ninguna decision.
+      </li>
+      <li>
+        <b>El silencio se cobra mas barato, y eso ya aparece en los datos.</b> ElevenLabs factura
+        los periodos de silencio al 5% de la tarifa por minuto: una de las seis llamadas nuevas duro
+        49 s pero pago solo 15 s de voz. Esta pagina asume el caso caro —que se cobra toda la
+        duracion—, asi que si algo, sobreestima.
+      </li>
+      <li>
+        <b>Las llamadas fallidas tambien cuestan.</b> Las que no alcanzan a conectar no consumen
+        creditos de ElevenLabs, pero si el telefono llego a sonar y a conectar un segundo, Twilio
+        cobra el minuto completo igual. Las <code>no-answer</code> no cobran nada.
+      </li>
+      <li>
+        <b>Esto es costo variable puro.</b> No incluye la infraestructura AWS ni ningun costo de
+        operacion mas alla de los creditos de ElevenLabs y los minutos de Twilio.
+      </li>
+      <li>
+        <b>La pasada de 83 llamadas todavia no es ejecutable.</b> El Semaforo no expone telefono en
+        ningun punto de la cadena (UV-024) y falta decidir a quien se llama (UV-023): la lectura de
+        hoy encontro 66 criticas en seccion A y <b>cero</b> con telefono disponible. El numero de
+        esta pagina es el costo si esos dos bloqueantes se resuelven, no un presupuesto para manana.
+      </li>
+      <li>
+        <b>Hoy llamas a Chile desde un numero de Estados Unidos.</b> La cuenta tiene un solo numero,
+        +1 260 305 1083 (Indiana), que cuesta US$ 1,15 al mes. El numero chileno son US$ 7,00:
+        US$ 5,85 mas al mes, no un costo nuevo completo. Los dos precios se releyeron hoy y no
+        cambiaron.
+      </li>
+      <li>
+        <b>Cuidado con que US$ 7,00 sea el numero que necesitas.</b> Ese es el precio del numero
+        <i>local</i> chileno, el unico tipo que la Pricing API ofrece para Chile. Para
+        comunicaciones automatizadas Twilio exige numeros +56 600 / +56 809 con KYC local, que se
+        tramitan aparte y pueden tener otro precio (UV-027, bloqueante externo del proyecto).
+        Verifica cual te corresponde antes de presupuestar.
+      </li>
+      <li>
+        <b>Seis llamadas son pocas llamadas.</b> El promedio de 36 s del agente nuevo sale de seis
+        conversaciones hechas en dos dias, con el equipo probando. Un lote real con gente que no
+        espera la llamada va a tener mas cortes tempranos (mas baratos) y algunas conversaciones
+        largas (mas caras). La cifra a vigilar cuando eso pase es el promedio de segundos, no el
+        costo por llamada: el costo se deduce de ahi.
+      </li>
+    </ul>
+  </section>
+
+  <!-- =================== FUENTES =================== -->
+  <section class="panel" aria-label="Fuentes">
+    <div class="panel-head">
+      <h2>De donde salio cada valor</h2>
+      <p class="panel-note">
+        Ningun numero de esta pagina fue estimado a mano. Los enlaces con <code>api.</code> o
+        <code>pricing.</code> responden solo con las credenciales de la cuenta.
+      </p>
+    </div>
+    <div class="fuentes">
+      <div class="fuente">
+        <b>US$ 0,0746 por minuto a movil chileno</b>
+        <span>Pricing API de Twilio, precio vigente de tu cuenta para el prefijo 569. Sin cambios desde la medicion anterior.</span>
+        <a href="https://pricing.twilio.com/v1/Voice/Countries/CL">pricing.twilio.com/v1/Voice/Countries/CL</a>
+        <a href="https://www.twilio.com/en-us/voice/pricing/cl">twilio.com/en-us/voice/pricing/cl</a>
+      </div>
+      <div class="fuente">
+        <b>US$ 7,00 al mes por el numero chileno</b>
+        <span>Pricing API de Twilio, tipo <code>local</code> — el unico que ofrece para Chile. El numero +1 actual, US$ 1,15.</span>
+        <a href="https://pricing.twilio.com/v1/PhoneNumbers/Countries/CL">pricing.twilio.com/v1/PhoneNumbers/Countries/CL</a>
+      </div>
+      <div class="fuente">
+        <b>Modelo, voz y ASR que corre el agente</b>
+        <span>Configuracion remota del agente Sence: <code>prompt.llm = qwen36-35b-a3b</code>, TTS <code>eleven_flash_v2_5</code>, ASR <code>scribe_realtime</code>.</span>
+        <a href="https://elevenlabs.io/docs/api-reference/agents/get">GET /v1/convai/agents/{agent_id}</a>
+      </div>
+      <div class="fuente">
+        <b>Creditos, tokens y precio de LLM de cada llamada</b>
+        <span>Bloque <code>metadata.charging</code> de cada conversacion: <code>call_charge</code>, <code>llm_charge</code>, <code>llm_usage.model_usage</code> y <code>platform_usage</code>.</span>
+        <a href="https://elevenlabs.io/docs/api-reference/conversations/get">GET /v1/convai/conversations/{id}</a>
+      </div>
+      <div class="fuente">
+        <b>400 creditos por minuto de voz = US$ 0,08</b>
+        <span>Medido en tus llamadas (<code>call_charge / platform_usage.voice.quantity</code>, 400,0–405,2 en las seis nuevas) y coincide con la tarifa publicada del minuto adicional.</span>
+        <a href="https://elevenlabs.io/pricing/agents">elevenlabs.io/pricing/agents</a>
+      </div>
+      <div class="fuente">
+        <b>US$ 6,00 por 30.000 creditos (plan Starter)</b>
+        <span>Pagina de planes: Starter US$ 6 con 75 minutos incluidos. La conversion US$ 0,0002 por credito se confirma dividiendo <code>platform_price / call_charge</code> en tus llamadas desde el 3-sep.</span>
+        <a href="https://elevenlabs.io/pricing/agents">elevenlabs.io/pricing/agents</a>
+      </div>
+      <div class="fuente">
+        <b>El silencio se cobra al 5%</b>
+        <span>Documentacion de optimizacion de costos de ElevenLabs.</span>
+        <a href="https://elevenlabs.io/docs/eleven-agents/customization/llm/optimizing-costs">elevenlabs.io/docs/.../optimizing-costs</a>
+      </div>
+      <div class="fuente">
+        <b>Estado y duracion de cada llamada telefonica</b>
+        <span>Recurso Call de la API de Twilio, las 27 llamadas de la cuenta.</span>
+        <a href="https://www.twilio.com/docs/voice/api/call-resource">GET /2010-04-01/Accounts/{Sid}/Calls.json</a>
+      </div>
+      <div class="fuente">
+        <b>66 criticas en A y 17 en B</b>
+        <span><code>GET /tablero/search</code> de <code>tablero-api</code> (interno de Umine): 6.217 registros, 256 OCs, leido el 21-sep-2026 con <code>npm run semaforo:probe -- --http</code>. El host no se publica a proposito — ese API responde sin autenticacion.</span>
+      </div>
+      <div class="fuente">
+        <b>$961,73 por dolar</b>
+        <span>Dolar observado del 21-sep-2026. Es el unico valor de esta pagina que envejece a diario: cambialo arriba.</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Leido el 21-sep-2026 contra las cuentas de produccion de ElevenLabs y Twilio. Los precios de
+    Twilio, las tarifas de ElevenLabs y el consumo del modelo cambian sin aviso: si la cifra importa
+    para una decision, vuelve a correr <code>npm run calls:sync</code> y revisa las fuentes de arriba
+    antes de comprometerla.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    "use strict";
+
+    // ------------------------------------------------------------------
+    // Datos reales de la cuenta. Leidos el 21-sep-2026 con la API de
+    // ElevenLabs (metadata.charging de cada conversacion). cr/s se calcula.
+    //   v = creditos de voz (call_charge)   l = creditos de LLM (llm_charge)
+    //   t = turnos del transcript           lp = US$ que costo el LLM
+    //   cmp = entra en la comparacion de regimenes (mismo esquema de cobro)
+    // ------------------------------------------------------------------
+    var LLAMADAS = [
+      { f: "2026-09-02 20:25", s: 13, v: 74, l: 4, c: 78, t: 3, lp: 0.000391, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-02 20:49", s: 20, v: 113, l: 44, c: 157, t: 3, lp: 0.004437, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-02 20:51", s: 70, v: 393, l: 58, c: 451, t: 9, lp: 0.005747, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-02 20:52", s: 2, v: 13, l: 0, c: 13, t: 1, lp: 0, m: null, ok: true, cmp: false },
+      { f: "2026-09-02 20:53", s: 0, v: 0, l: 0, c: 0, t: 0, lp: 0, m: null, ok: false, cmp: false, why: "no llego a conversar" },
+      { f: "2026-09-02 21:08", s: 47, v: 516, l: 18, c: 534, t: 7, lp: 0.001834, m: "qwen35", ok: true, cmp: false },
+      { f: "2026-09-02 21:10", s: 0, v: 0, l: 0, c: 0, t: 0, lp: 0, m: null, ok: false, cmp: false, why: "no llego a conversar" },
+      { f: "2026-09-02 21:11", s: 75, v: 836, l: 117, c: 953, t: 11, lp: 0.011678, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-02 21:16", s: 62, v: 700, l: 63, c: 763, t: 11, lp: 0.006306, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-02 21:17", s: 35, v: 389, l: 27, c: 416, t: 5, lp: 0.002722, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-02 21:20", s: 118, v: 1316, l: 185, c: 1501, t: 23, lp: 0.018535, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-02 21:20", s: 136, v: 1511, l: 267, c: 1778, t: 31, lp: 0.026741, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-02 22:56", s: 132, v: 1461, l: 227, c: 1688, t: 21, lp: 0.022705, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-02 22:59", s: 0, v: 0, l: 0, c: 0, t: 0, lp: 0, m: null, ok: false, cmp: false, why: "no llego a conversar" },
+      { f: "2026-09-03 02:18", s: 84, v: 929, l: 99, c: 1028, t: 15, lp: 0.009872, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-03 13:11", s: 61, v: 673, l: 127, c: 800, t: 9, lp: 0.012739, m: "gemini", ok: true, cmp: false },
+      { f: "2026-09-03 13:14", s: 1, v: 0, l: 0, c: 0, t: 1, lp: 0, m: null, ok: false, cmp: false, why: "no llego a conversar" },
+      { f: "2026-09-03 13:14", s: 1, v: 0, l: 0, c: 0, t: 1, lp: 0, m: null, ok: false, cmp: false, why: "no llego a conversar" },
+      { f: "2026-09-03 13:15", s: 0, v: 0, l: 0, c: 0, t: 1, lp: 0, m: null, ok: false, cmp: false, why: "no llego a conversar" },
+      { f: "2026-09-03 13:16", s: 0, v: 0, l: 0, c: 0, t: 1, lp: 0, m: null, ok: false, cmp: false, why: "no llego a conversar" },
+      { f: "2026-09-03 13:18", s: 1, v: 0, l: 0, c: 0, t: 1, lp: 0, m: null, ok: false, cmp: false, why: "no llego a conversar" },
+      { f: "2026-09-03 13:19", s: 0, v: 0, l: 0, c: 0, t: 1, lp: 0, m: null, ok: false, cmp: false, why: "no llego a conversar" },
+      { f: "2026-09-03 13:24", s: 62, v: 418, l: 37, c: 455, t: 10, lp: 0.007365, m: "gemini", ok: true, cmp: true },
+      { f: "2026-09-03 17:41", s: 72, v: 485, l: 52, c: 537, t: 13, lp: 0.010351, m: "gemini", ok: true, cmp: true },
+      { f: "2026-09-09 20:58", s: 24, v: 160, l: 25, c: 185, t: 12, lp: 0.0049, m: null, ok: true, cmp: false },
+      { f: "2026-09-09 20:59", s: 53, v: 357, l: 40, c: 397, t: 14, lp: 0.007914, m: "gemini", ok: true, cmp: true },
+      { f: "2026-09-09 21:17", s: 45, v: 299, l: 59, c: 358, t: 13, lp: 0.012025, m: "gemini", ok: true, cmp: true },
+      { f: "2026-09-09 21:17", s: 89, v: 594, l: 0, c: 594, t: 1, lp: 0, m: null, ok: true, cmp: false },
+      { f: "2026-09-10 14:56", s: 72, v: 475, l: 102, c: 577, t: 21, lp: 0.020334, m: "gemini", ok: true, cmp: true },
+      { f: "2026-09-10 17:50", s: 5, v: 33, l: 0, c: 33, t: 1, lp: 0, m: null, ok: true, cmp: false },
+      { f: "2026-09-10 21:46", s: 83, v: 549, l: 117, c: 666, t: 15, lp: 0.023343, m: "gemini", ok: true, cmp: true },
+      { f: "2026-09-15 18:37", s: 59, v: 397, l: 27, c: 424, t: 15, lp: 0.005361, m: "qwen36", ok: true, cmp: true },
+      { f: "2026-09-16 18:11", s: 51, v: 341, l: 32, c: 373, t: 16, lp: 0.006244, m: "qwen36", ok: true, cmp: true },
+      { f: "2026-09-16 18:56", s: 21, v: 140, l: 16, c: 156, t: 12, lp: 0.003358, m: "qwen36", ok: true, cmp: true },
+      { f: "2026-09-16 18:56", s: 49, v: 114, l: 9, c: 123, t: 8, lp: 0.001977, m: "qwen36", ok: true, cmp: true },
+      { f: "2026-09-16 19:03", s: 27, v: 184, l: 19, c: 203, t: 11, lp: 0.003859, m: "qwen36", ok: true, cmp: true },
+      { f: "2026-09-16 19:21", s: 10, v: 65, l: 8, c: 73, t: 8, lp: 0.001581, m: "qwen36", ok: true, cmp: true }
+    ];
+
+    var NOMBRE_MODELO = {
+      qwen36: "qwen36-35b-a3b",
+      gemini: "gemini-3.7-flash",
+      qwen35: "qwen35-397b-a17b"
+    };
+    // Consumo de LLM medido en cada regimen (creditos por segundo de conversacion).
+    var CRS_QWEN = 0.5115;
+    var CRS_GEMINI = 1.0517;
+    // La llamada de la version anterior de esta pagina, para los deltas.
+    var ANTES = { dur: 80, call: 0.27269, min: 0.16711 };
+
+    // ---------------------------- formato ----------------------------
+    var usd = function (v, d) {
+      return "US$ " + v.toLocaleString("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
+    };
+    var clp = function (v) { return "$" + Math.round(v).toLocaleString("es-CL"); };
+    var ent = function (v) { return Math.round(v).toLocaleString("es-CL"); };
+    var pct = function (v) { return (v * 100).toFixed(v < 0.1 ? 1 : 0).replace(".", ",") + "%"; };
+    var dec = function (v, d) { return v.toLocaleString("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d }); };
+    var $ = function (id) { return document.getElementById(id); };
+
+    var estado = { llmCrSeg: CRS_QWEN };
+
+    // --------------------------- el modelo ---------------------------
+    // Una sola funcion de costo, usada por las cifras, la tabla y el grafico:
+    // si cambia una regla de cobro, cambia en un solo lugar.
+    function costo(seg, p) {
+      var crVoz = (seg / 60) * p.vozCrMin;
+      var crLlm = seg * p.llmCrSeg;
+      var minFact = p.redondea ? Math.ceil(seg / 60) : seg / 60;
+      var voz = crVoz * p.usdCredito;
+      var llm = crLlm * p.usdCredito;
+      var tw = minFact * p.tarifa;
+      return {
+        seg: seg, crVoz: crVoz, crLlm: crLlm, cr: crVoz + crLlm, minFact: minFact,
+        voz: voz, llm: llm, tw: tw, total: voz + llm + tw
+      };
+    }
+
+    function params() {
+      var packUsd = Number($("pack-usd").value) || 0;
+      var packCred = Number($("pack-credits").value) || 1;
+      return {
+        seg: Number($("dur").value),
+        vozCrMin: Number($("voz-rate").value) || 0,
+        llmCrSeg: Number($("llm-rate").value) || 0,
+        usdCredito: packUsd / packCred,
+        tarifa: Number($("twilio-rate").value) || 0,
+        tasaClp: Number($("clp").value) || 0,
+        llamadas: Math.max(1, Number($("calls").value) || 1),
+        redondea: $("redondeo").checked,
+        numeroMes: Number($("num-usd").value) || 0,
+        packCred: packCred
+      };
+    }
+
+    // --------------------------- el calculo --------------------------
+    function calcular() {
+      var p = params();
+      var c = costo(p.seg, p);
+      // Tarifa pura por minuto: sin el redondeo, que no es una tarifa sino un bloque minimo.
+      var vozMin = p.vozCrMin * p.usdCredito;
+      var llmMin = p.llmCrSeg * 60 * p.usdCredito;
+      var totMin = vozMin + llmMin + p.tarifa;
+
+      $("dur-out").textContent = p.seg;
+      $("k-dur").textContent = p.seg;
+      $("unit-credit").textContent = "US$ " + p.usdCredito.toFixed(6).replace(".", ",") + " por credito";
+
+      $("k-call").textContent = usd(c.total, 3);
+      $("k-call-clp").textContent = "≈ " + clp(c.total * p.tasaClp) + " CLP";
+      $("k-min").textContent = usd(totMin, 3);
+      $("k-min-clp").textContent = "≈ " + clp(totMin * p.tasaClp) + " CLP";
+
+      delta("k-call-delta", c.total, ANTES.call);
+      delta("k-min-delta", totMin, ANTES.min);
+
+      var pasada = c.total * p.llamadas;
+      $("k-pass").textContent = usd(pasada, 2);
+      $("k-pass-clp").textContent = "≈ " + clp(pasada * p.tasaClp) + " CLP";
+      $("k-calls").textContent = ent(p.llamadas);
+
+      // --- barra de composicion + tabla de desglose ---
+      var partes = [
+        { id: "voz", v: c.voz, min: vozMin, q: ent(c.crVoz) + " creditos" },
+        { id: "llm", v: c.llm, min: llmMin, q: ent(c.crLlm) + " creditos" },
+        { id: "tw", v: c.tw, min: p.tarifa, q: dec(c.minFact, c.minFact % 1 === 0 ? 0 : 2) + (c.minFact === 1 ? " min facturado" : " min facturados") }
+      ];
+      var textos = [];
+      partes.forEach(function (x) {
+        var share = c.total > 0 ? x.v / c.total : 0;
+        $("seg-" + x.id).style.width = (share * 100).toFixed(2) + "%";
+        $("seg-" + x.id + "-t").textContent = share >= 0.07 ? pct(share) : "";
+        $("r-" + x.id + "-q").textContent = x.q;
+        $("r-" + x.id + "-call").textContent = usd(x.v, 4);
+        $("r-" + x.id + "-min").textContent = usd(x.min, 4);
+        $("r-" + x.id + "-clp").textContent = clp(x.v * p.tasaClp);
+        $("r-" + x.id + "-pct").textContent = pct(share);
+        textos.push(pct(share));
+      });
+      $("stack-desc-txt").textContent = "voz " + textos[0] + ", LLM " + textos[1] + ", telefonia " + textos[2];
+      $("r-tot-q").textContent = p.seg + " s";
+      $("r-tot-call").textContent = usd(c.total, 4);
+      $("r-tot-min").textContent = usd(totMin, 4);
+      $("r-tot-clp").textContent = clp(c.total * p.tasaClp);
+
+      var minEfectivo = c.total / (p.seg / 60);
+      $("nota-redondeo").textContent = p.redondea
+        ? "Con el redondeo de Twilio, el minuto efectivo de una llamada de " + p.seg + " s sale " +
+          usd(minEfectivo, 3) + " — " + dec(minEfectivo / totMin, 2) + " veces la tarifa pura, porque pagas " +
+          ent(c.minFact * 60) + " s de telefonia por " + p.seg + " s de conversacion. Cuanto mas corta la llamada, mas pesa ese redondeo."
+        : "Sin redondeo, el minuto efectivo coincide con la tarifa pura (" + usd(totMin, 3) +
+          "). Es el escenario optimista: Twilio factura en bloques de 60 s salvo que tu contrato diga otra cosa.";
+
+      // --- la pasada y el mes ---
+      var crVozTot = c.crVoz * p.llamadas, crLlmTot = c.crLlm * p.llamadas;
+      var vozTot = c.voz * p.llamadas, llmTot = c.llm * p.llamadas, twTot = c.tw * p.llamadas;
+      $("p-voz-cr").textContent = ent(crVozTot);
+      $("p-llm-cr").textContent = ent(crLlmTot);
+      $("p-tw-min").textContent = dec(c.minFact * p.llamadas, c.minFact % 1 === 0 ? 0 : 1);
+      $("p-n").textContent = ent(p.llamadas);
+      [["voz", vozTot], ["llm", llmTot], ["tw", twTot], ["var", pasada],
+       ["num", p.numeroMes], ["mes", pasada + p.numeroMes]].forEach(function (x) {
+        $("p-" + x[0] + "-usd").textContent = usd(x[1], 2);
+        $("p-" + x[0] + "-clp").textContent = clp(x[1] * p.tasaClp);
+      });
+
+      var porLlamadaMes = (pasada + p.numeroMes) / p.llamadas;
+      $("nota-prorrateo").textContent =
+        "Con el numero prorrateado, cada llamada del mes sale " + usd(porLlamadaMes, 3) + " en vez de " +
+        usd(c.total, 3) + ": el arriendo pesa un " + pct(p.numeroMes / pasada) +
+        " extra cuando se reparte entre " + ent(p.llamadas) + " llamadas. Mientras menos llames, mas caro " +
+        "sale cada llamada — es el unico costo que corre igual si no llamas a nadie.";
+
+      // --- cabe o no cabe en el plan ---
+      var crTotales = crVozTot + crLlmTot;
+      var caben = c.cr > 0 ? Math.floor(p.packCred / c.cr) : 0;
+      var box = $("alerta-plan");
+      if (crTotales <= p.packCred) {
+        box.className = "alert alert--ok";
+        box.firstElementChild.textContent = "✓";
+        $("alerta-plan-txt").innerHTML =
+          "<b>La pasada cabe en el plan.</b> Una vuelta completa consume " + ent(crTotales) +
+          " creditos de los " + ent(p.packCred) + " que trae tu paquete: queda el " +
+          pct(1 - crTotales / p.packCred) + " libre y alcanzaria para " + ent(caben) +
+          " llamadas de " + p.seg + " s en el mes. En la version anterior —80 s por llamada con el modelo " +
+          "viejo— la misma vuelta pedia 37.576 creditos y el plan se agotaba antes de terminarla.";
+      } else {
+        box.className = "alert alert--warn";
+        box.firstElementChild.textContent = "⚠";
+        $("alerta-plan-txt").innerHTML =
+          "<b>El plan no alcanza para una pasada.</b> Una vuelta completa consume " + ent(crTotales) +
+          " creditos y tu paquete trae " + ent(p.packCred) + ": te quedas sin plan en la llamada " +
+          (caben + 1) + " de " + ent(p.llamadas) + ". Los minutos extra se siguen cobrando a la misma " +
+          "tarifa, asi que el total de arriba no cambia — lo que cambia es que dejan de estar pagados.";
+      }
+
+      tablaCurva(p);
+      dibujarCurva(p);
+    }
+
+    function delta(id, ahora, antes) {
+      var el = $(id);
+      var d = (ahora - antes) / antes;
+      el.textContent = (d <= 0 ? "−" : "+") + pct(Math.abs(d)) + " vs. la version anterior";
+      el.style.color = d <= 0 ? "var(--ok)" : "var(--critico)";
+    }
+
+    // --------------------- tabla de la curva -------------------------
+    var HITOS = [15, 30, 45, 59, 60, 61, 90, 120];
+    function tablaCurva(p) {
+      var html = HITOS.map(function (s) {
+        var c = costo(s, p);
+        var marca = s === p.seg ? ' style="font-weight:600"' : "";
+        return "<tr" + marca + "><td class='mono'>" + s + " s</td>" +
+          "<td class='mono'>" + usd(c.voz, 4) + "</td>" +
+          "<td class='mono'>" + usd(c.llm, 4) + "</td>" +
+          "<td class='mono'>" + usd(c.tw, 4) + "</td>" +
+          "<td class='mono'>" + usd(c.total, 4) + "</td>" +
+          "<td class='mono'>" + clp(c.total * p.tasaClp) + "</td>" +
+          "<td class='mono'>" + usd(c.total / (s / 60), 3) + "</td></tr>";
+      }).join("");
+      $("tabla-curva").innerHTML = html;
+    }
+
+    // ------------------- grafico 1: costo vs duracion ----------------
+    var CV = { w: 720, h: 320, l: 56, r: 14, t: 26, b: 36, xMax: 180 };
+    CV.pw = CV.w - CV.l - CV.r;
+    CV.ph = CV.h - CV.t - CV.b;
+
+    function dibujarCurva(p) {
+      var svg = $("curva");
+      var cMax = costo(CV.xMax, p);
+      var yMax = nice(cMax.total);
+      var x = function (s) { return CV.l + (s / CV.xMax) * CV.pw; };
+      var y = function (v) { return CV.t + CV.ph - (v / yMax) * CV.ph; };
+
+      var capas = [[], [], []];   // acumuladas: voz, voz+llm, voz+llm+tw
+      var datos = [];
+      for (var s = 0; s <= CV.xMax; s++) {
+        var c = costo(s, p);
+        datos.push(c);
+        capas[0].push([x(s), y(c.voz)]);
+        capas[1].push([x(s), y(c.voz + c.llm)]);
+        capas[2].push([x(s), y(c.total)]);
+      }
+      var base = capas[0].map(function (pt) { return [pt[0], y(0)]; });
+      var areas = [
+        { pts: banda(base, capas[0]), fill: "var(--eleven)" },
+        { pts: banda(capas[0], capas[1]), fill: "var(--llm)" },
+        { pts: banda(capas[1], capas[2]), fill: "var(--twilio)" }
+      ];
+
+      var out = "";
+      // grilla + eje Y
+      var pasos = 5;
+      for (var i = 0; i <= pasos; i++) {
+        var v = (yMax / pasos) * i, yy = y(v);
+        out += '<line class="gridline" x1="' + CV.l + '" y1="' + yy + '" x2="' + (CV.l + CV.pw) + '" y2="' + yy + '"/>';
+        out += '<text class="axis-lbl" x="' + (CV.l - 8) + '" y="' + (yy + 3.5) + '" text-anchor="end">' + usd(v, 2) + "</text>";
+      }
+      // areas apiladas, con 2px de separacion entre capas
+      areas.forEach(function (a) {
+        out += '<polygon points="' + a.pts + '" fill="' + a.fill + '" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round"/>';
+      });
+      // eje X
+      for (var s2 = 0; s2 <= CV.xMax; s2 += 30) {
+        out += '<text class="axis-lbl" x="' + x(s2) + '" y="' + (CV.t + CV.ph + 18) + '" text-anchor="middle">' + s2 + "s</text>";
+      }
+      out += '<line class="gridline" x1="' + CV.l + '" y1="' + (CV.t + CV.ph) + '" x2="' + (CV.l + CV.pw) + '" y2="' + (CV.t + CV.ph) + '" stroke="var(--line)" stroke-width="1"/>';
+      // marcadores: el supuesto de hoy y el de la version anterior
+      out += marcador(x(ANTES.dur), "80s · antes", y(0));
+      out += marcador(x(p.seg), p.seg + "s · hoy", y(0), true);
+      // capa de hover
+      out += '<rect id="curva-hit" x="' + CV.l + '" y="' + CV.t + '" width="' + CV.pw + '" height="' + CV.ph + '" fill="transparent"/>';
+      out += '<text class="axis-lbl" x="4" y="' + (CV.t - 2) + '">US$ por llamada</text>';
+      out += '<line id="curva-cross" x1="0" y1="' + CV.t + '" x2="0" y2="' + (CV.t + CV.ph) + '" stroke="var(--ink)" stroke-width="1" opacity="0"/>';
+      svg.innerHTML = out;
+
+      hoverCurva(svg, datos, x, y, p);
+    }
+
+    function banda(inferior, superior) {
+      return superior.map(pt).join(" ") + " " + inferior.slice().reverse().map(pt).join(" ");
+      function pt(a) { return a[0].toFixed(1) + "," + a[1].toFixed(1); }
+    }
+    function marcador(px, texto, y0, fuerte) {
+      return '<line class="marker-line" x1="' + px + '" y1="' + CV.t + '" x2="' + px + '" y2="' + y0 + '"' +
+        (fuerte ? ' stroke-dasharray="0" stroke-width="1.5"' : "") + "/>" +
+        '<text class="marker-text" x="' + (px + 5) + '" y="' + (CV.t + 11) + '">' + texto + "</text>";
+    }
+    function nice(v) {
+      var mag = Math.pow(10, Math.floor(Math.log10(v)));
+      var paso = mag / 2;
+      return Math.ceil(v / paso) * paso;
+    }
+
+    function hoverCurva(svg, datos, x, y, p) {
+      var hit = $("curva-hit"), cross = $("curva-cross"), tip = $("tip-curva");
+      var box = svg.parentNode;
+      function mover(ev) {
+        var r = svg.getBoundingClientRect();
+        var px = ((ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left) / r.width * CV.w;
+        var s = Math.round(Math.max(0, Math.min(CV.xMax, (px - CV.l) / CV.pw * CV.xMax)));
+        var c = datos[s];
+        cross.setAttribute("x1", x(s)); cross.setAttribute("x2", x(s));
+        cross.setAttribute("opacity", "0.45");
+        tip.innerHTML = "<b>" + s + " s</b> · " + usd(c.total, 4) + " · " + clp(c.total * p.tasaClp) + " CLP<br>" +
+          "voz " + usd(c.voz, 4) + " · LLM " + usd(c.llm, 4) + " · Twilio " + usd(c.tw, 4);
+        tip.style.left = (x(s) / CV.w * r.width) + "px";
+        tip.style.top = (y(c.total) / CV.h * r.height - 8) + "px";
+        tip.style.opacity = "1";
+      }
+      function salir() { tip.style.opacity = "0"; cross.setAttribute("opacity", "0"); }
+      hit.addEventListener("mousemove", mover);
+      hit.addEventListener("touchmove", function (e) { mover(e); e.preventDefault(); }, { passive: false });
+      hit.addEventListener("mouseleave", salir);
+      hit.addEventListener("touchend", salir);
+      if (!box.dataset.listo) { box.addEventListener("mouseleave", salir); box.dataset.listo = "1"; }
+    }
+
+    // ------------- grafico 2: creditos de LLM por llamada real -------
+    var SC = { w: 720, h: 320, l: 52, r: 14, t: 26, b: 36, xMax: 90, yMax: 120 };
+    SC.pw = SC.w - SC.l - SC.r;
+    SC.ph = SC.h - SC.t - SC.b;
+
+    function dibujarScatter() {
+      var svg = $("scatter");
+      var pts = LLAMADAS.filter(function (o) { return o.cmp; });
+      var x = function (s) { return SC.l + (s / SC.xMax) * SC.pw; };
+      var y = function (v) { return SC.t + SC.ph - (v / SC.yMax) * SC.ph; };
+      var out = "";
+
+      for (var i = 0; i <= 4; i++) {
+        var v = (SC.yMax / 4) * i, yy = y(v);
+        out += '<line class="gridline" x1="' + SC.l + '" y1="' + yy + '" x2="' + (SC.l + SC.pw) + '" y2="' + yy + '"/>';
+        out += '<text class="axis-lbl" x="' + (SC.l - 8) + '" y="' + (yy + 3.5) + '" text-anchor="end">' + v + "</text>";
+      }
+      for (var s2 = 0; s2 <= SC.xMax; s2 += 15) {
+        out += '<text class="axis-lbl" x="' + x(s2) + '" y="' + (SC.t + SC.ph + 18) + '" text-anchor="middle">' + s2 + "s</text>";
+      }
+      out += '<line x1="' + SC.l + '" y1="' + (SC.t + SC.ph) + '" x2="' + (SC.l + SC.pw) + '" y2="' + (SC.t + SC.ph) + '" stroke="var(--line)" stroke-width="1"/>';
+
+      // los dos regimenes, como rayos desde el origen
+      [{ cr: CRS_GEMINI, color: "var(--eleven)", lbl: "gemini · 1,05 cr/s" },
+       { cr: CRS_QWEN, color: "var(--llm)", lbl: "qwen36 · 0,51 cr/s" }].forEach(function (r) {
+        var sFin = Math.min(SC.xMax, SC.yMax / r.cr);
+        out += '<line x1="' + x(0) + '" y1="' + y(0) + '" x2="' + x(sFin) + '" y2="' + y(sFin * r.cr) +
+          '" stroke="' + r.color + '" stroke-width="2" stroke-opacity="0.5" stroke-dasharray="5 4"/>';
+        out += '<text x="' + (x(sFin) - 4) + '" y="' + (y(sFin * r.cr) - 7) + '" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="' + r.color + '">' + r.lbl + "</text>";
+      });
+
+      pts.forEach(function (o, i) {
+        var color = o.m === "qwen36" ? "var(--llm)" : "var(--eleven)";
+        out += '<circle class="pt" data-i="' + i + '" cx="' + x(o.s) + '" cy="' + y(o.l) + '" r="6" fill="' + color +
+          '" stroke="var(--surface)" stroke-width="2"/>';
+      });
+      out += '<text class="axis-lbl" x="' + (SC.l - 40) + '" y="' + (SC.t - 10) + '">creditos de LLM</text>';
+      svg.innerHTML = out;
+
+      var tip = $("tip-scatter"), box = svg.parentNode;
+      Array.prototype.forEach.call(svg.querySelectorAll(".pt"), function (el) {
+        var o = pts[Number(el.dataset.i)];
+        el.addEventListener("mouseenter", function () {
+          var r = svg.getBoundingClientRect();
+          tip.innerHTML = "<b>" + o.f + "</b><br>" + NOMBRE_MODELO[o.m] + "<br>" + o.s + " s · " + o.t +
+            " turnos · " + o.l + " cr LLM<br>" + (o.l / o.s).toFixed(2).replace(".", ",") + " cr/s · US$ " +
+            o.lp.toFixed(5).replace(".", ",");
+          tip.style.left = (x(o.s) / SC.w * r.width) + "px";
+          tip.style.top = (y(o.l) / SC.h * r.height - 10) + "px";
+          tip.style.opacity = "1";
+        });
+        el.addEventListener("mouseleave", function () { tip.style.opacity = "0"; });
+      });
+      box.addEventListener("mouseleave", function () { tip.style.opacity = "0"; });
+    }
+
+    // --------------------- tablas de evidencia -----------------------
+    function tablasEvidencia() {
+      $("tabla-reales").innerHTML = LLAMADAS.filter(function (o) { return o.cmp; })
+        .map(function (o) {
+          return "<tr><td class='mono'>" + o.f + "</td>" +
+            "<td class='mono'><i class='dot' style='background:" + (o.m === "qwen36" ? "var(--llm)" : "var(--eleven)") + "'></i>" + NOMBRE_MODELO[o.m] + "</td>" +
+            "<td class='mono'>" + o.s + "</td><td class='mono'>" + o.t + "</td>" +
+            "<td class='mono'>" + o.v + "</td><td class='mono'>" + o.l + "</td><td class='mono'>" + o.c + "</td>" +
+            "<td class='mono'>" + (o.c / o.s).toFixed(2).replace(".", ",") + "</td>" +
+            "<td class='mono'>" + o.lp.toFixed(5).replace(".", ",") + "</td></tr>";
+        }).join("");
+
+      $("tabla-todas").innerHTML = LLAMADAS.map(function (o) {
+        var cuenta = o.cmp ? "si" : (o.ok ? "otro esquema de cobro" : (o.why || "no"));
+        return "<tr" + (o.cmp ? "" : ' style="opacity:0.62"') + "><td class='mono'>" + o.f + "</td>" +
+          "<td class='mono'>" + (o.m ? NOMBRE_MODELO[o.m] : "—") + "</td>" +
+          "<td class='mono'>" + o.s + "</td><td class='mono'>" + o.t + "</td>" +
+          "<td class='mono'>" + o.v + "</td><td class='mono'>" + o.l + "</td><td class='mono'>" + o.c + "</td>" +
+          "<td class='mono'>" + (o.ok ? "conversó" : "sin conversación") + "</td>" +
+          "<td class='mono'>" + cuenta + "</td></tr>";
+      }).join("");
+    }
+
+    // --------------------------- controles ---------------------------
+    function grupo(id, onPick) {
+      var cont = $(id);
+      cont.addEventListener("click", function (ev) {
+        var b = ev.target.closest("button");
+        if (!b) return;
+        Array.prototype.forEach.call(cont.querySelectorAll("button"), function (x) {
+          x.setAttribute("aria-pressed", String(x === b));
+        });
+        onPick(b);
+      });
+    }
+    function sincronizaGrupo(id, attr, valor) {
+      Array.prototype.forEach.call($(id).querySelectorAll("button"), function (b) {
+        b.setAttribute("aria-pressed", String(Math.abs(Number(b.dataset[attr]) - valor) < 1e-9));
+      });
+    }
+
+    ["dur", "voz-rate", "llm-rate", "pack-usd", "pack-credits", "twilio-rate", "clp", "calls", "num-usd", "redondeo"]
+      .forEach(function (id) {
+        $(id).addEventListener("input", function () {
+          if (id === "llm-rate") sincronizaGrupo("llm-presets", "llm", Number($(id).value));
+          if (id === "calls") sincronizaGrupo("calls-presets", "calls", Number($(id).value));
+          if (id === "num-usd") sincronizaGrupo("num-presets", "num", Number($(id).value));
+          calcular();
+        });
+        $(id).addEventListener("change", calcular);
+      });
+
+    grupo("llm-presets", function (b) { $("llm-rate").value = b.dataset.llm; calcular(); });
+    grupo("calls-presets", function (b) { $("calls").value = b.dataset.calls; calcular(); });
+    grupo("num-presets", function (b) { $("num-usd").value = b.dataset.num; calcular(); });
+
+    tablasEvidencia();
+    dibujarScatter();
+    calcular();
+  })();
+</script>
